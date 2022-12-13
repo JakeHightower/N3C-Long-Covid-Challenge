@@ -9,5 +9,7 @@ legacyVectorLanguage: null
 autoLayoutPaths: false
 useProjectScope: true
 tokenMode: "SCOPED_TOKEN"
-duplicatedFromWorkbook: null
+duplicatedFromWorkbook:
+  workbookRid: "ri.vector.main.workbook.ad919127-f846-439d-909c-766c28979021"
+  branch: "master"
 workbookType: "DEFAULT"

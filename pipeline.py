@@ -40,6 +40,30 @@ def cci_join(icd_match, concept_set_members):
     
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.135459d9-ff11-45b7-be37-2e2552c4a89a"),
+    cci_join=Input(rid="ri.vector.main.execute.2d0dc8c6-248b-41c3-b06f-be288eea5683"),
+    pivot_by_person=Input(rid="ri.vector.main.execute.ceecf240-b697-4628-94de-8ac0dba046ca")
+)
+from pyspark.sql import functions as F
+
+def conditions_only(pivot_by_person, cci_join):
+    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100)
+    sub100_removed = cci_join.join(sub100, cci_join.pre_post_condition==sub100.condition, 'left_anti')
+    conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
+    #Rejoining with CCI counts
+    return conds.join(cci_join.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
+    
+
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.9983da15-9e7d-4d73-9ae3-da74847b93fc"),
+    duplicate_icds=Input(rid="ri.vector.main.execute.bf34a516-47c9-44b2-a70f-421f24eb5d64")
+)
+#condition_era_id = 1000050713616695994, person_id=8904989188366942906
+
+def duplicate_example(duplicate_icds):
+    return duplicate_icds.filter(duplicate_icds.condition_era_id==1000050713616695994)    
+
+@transform_pandas(
     Output(rid="ri.vector.main.execute.bf34a516-47c9-44b2-a70f-421f24eb5d64"),
     icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855")
 )
@@ -107,6 +131,24 @@ def first_row_pp():
     return df.withColumn("pre_post_condition", concat(df.pre_post_covid, lit('_'), df.default_ccsr_category_op_clean))
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.1408546e-c5b8-4119-b8d1-b41fc5d7cb9e"),
+    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+)
+from pyspark.sql import functions as F
+
+def frequency_all(no_icd_match):
+    return no_icd_match.groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
+
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.0d7687bf-d562-40e5-81e2-1b4fa90fffd7"),
+    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+)
+from pyspark.sql import functions as F
+
+def frequency_long_covid(no_icd_match):
+    return no_icd_match.filter(no_icd_match.pasc_code_after_four_weeks==1).groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
+
+@transform_pandas(
     Output(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
     person_mapped=Input(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f")
 )
@@ -130,6 +172,14 @@ def icd_match(person_mapped):
     w2 = Window.partitionBy("condition_era_id").orderBy(F.col("icd_length"))
     return df.withColumn("row",F.row_number().over(w2)) \
     .filter(F.col("row") == 1).drop("row")
+
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.9180ee4f-3b1a-46f2-8bdb-be5b381abef9"),
+    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+)
+def manually_coded_conds(no_icd_match):
+    #Adding 2 manually coded conditions back into the mix
+    
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c"),
@@ -169,6 +219,28 @@ def no_conditions(person_all, condition_era_all):
     return person_all.join(condition_era_all, person_all.person_id == condition_era_all.person_id, how='left_anti') 
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df"),
+    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
+    person_mapped=Input(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f")
+)
+from pyspark.sql import functions as F
+
+def no_icd_match(person_mapped, icd_match):    
+    no_match = person_mapped.filter(person_mapped.default_ccsr_category_op_clean.isNull())
+    return no_match.join(icd_match, icd_match.condition_era_id == no_match.condition_era_id, how='left_anti')
+
+    
+
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.c91cb327-cf16-473b-9ec3-a8ceec0398ba"),
+    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+)
+from pyspark.sql import functions as F
+
+def no_icd_match_duplicates(no_icd_match):
+    return no_icd_match.groupBy("condition_era_id").count().filter("count > 1").join(no_icd_match, 'condition_era_id', 'left').sort(F.desc("count"))
+
+@transform_pandas(
     Output(rid="ri.vector.main.execute.31690664-c9f6-44ac-95c3-2db4c9ef15cf"),
     mapped_concepts=Input(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c")
 )
@@ -200,6 +272,17 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
     return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.dcdad9bf-abec-40a7-9c13-57aba4b7973c"),
+    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
+    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+)
+#Outputs users who have only condition_eras that have no match to CCSR (as opposed to some that have matches and some that don't)
+ def person_count(no_icd_match, icd_match):
+    no = no_icd_match.dropDuplicates(['person_id'])
+    yes = icd_match.dropDuplicates(['person_id'])
+    return no.join(yes, 'person_id', 'left_anti')
+
+@transform_pandas(
     Output(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f"),
     mapped_concepts=Input(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c"),
     person_condition=Input(rid="ri.vector.main.execute.b301a068-50e2-4187-aea4-0314d9429ad8")
@@ -217,6 +300,29 @@ from pyspark.sql import functions as F
 def person_test_ind(person_test):
     #Adding indicator that this person is part of the test set
     return person_test.withColumn('test_ind', F.lit(1))
+
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.ceecf240-b697-4628-94de-8ac0dba046ca"),
+    cci_join=Input(rid="ri.vector.main.execute.2d0dc8c6-248b-41c3-b06f-be288eea5683")
+)
+#pivot data example pulled from: /UNITE/N3C Training Area/Practice Area - Public and Example Data/Machine learning examples/synthea_RF/conditions_and_demographics_synthea_dialysis_RF/RandomForest_Dialysis_Synthea
+
+from pyspark.sql import functions as F
+import pandas as pd
+
+#Pivoting and then counting the occurrence of each pre/post condition 
+def pivot_by_person(cci_join):
+    df = cci_join.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
+
+    df_sum = df.select(df.columns[1:]) #Grabbing condition columns
+    cols = [F.sum(F.col(x)).alias(x) for x in df_sum.columns]
+    agg_df = df_sum.agg(*cols).toPandas()
+    return pd.melt(agg_df, var_name='condition', value_name='condition_count')
+    
+    
+    
+    # df_cci = first_row_pp.filter(first_row_pp.pre_post_cci_condition.isNotNull()).groupBy("person_id").pivot("pre_post_cci_condition").agg(F.lit(1)).fillna(0) 
+    # return df_ccsr.join(df_cci, ["person_id"], 'left').fillna(0)
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.b816b156-d14a-4ab4-9478-ce6de6e18baf"),

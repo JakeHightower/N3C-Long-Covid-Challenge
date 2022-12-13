@@ -160,19 +160,6 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     # return concept_icd10.groupBy('valid_end_date').count()
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
-    person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
-)
-from pyspark.sql import functions as F
-
-def no_icd_match(person_mapped, icd_match):    
-    no_match = person_mapped.filter(person_mapped.default_ccsr_category_op_clean.isNull())
-    return no_match.join(icd_match, icd_match.condition_era_id == no_match.condition_era_id, how='left_anti')
-
-    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     person_test_ind=Input(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
@@ -195,8 +182,7 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.b4a128cf-65dd-4aff-bd7f-4ee075464662"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
-    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )
 #Outputs users who have only condition_eras that have no match to CCSR (as opposed to some that have matches and some that don't)
  def person_count(no_icd_match, icd_match):

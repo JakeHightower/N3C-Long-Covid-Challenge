@@ -189,15 +189,6 @@ def no_icd_match(person_mapped, icd_match):
     
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.978ffea4-f41d-4447-8627-a067f41f16de"),
-    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
-)
-from pyspark.sql import functions as F
-
-def no_icd_match_duplicates(no_icd_match):
-    return no_icd_match.groupBy("condition_era_id").count().filter("count > 1").join(no_icd_match, 'condition_era_id', 'left').sort(F.desc("count"))
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     person_test_ind=Input(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")

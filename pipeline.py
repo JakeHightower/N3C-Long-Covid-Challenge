@@ -110,21 +110,29 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
+    Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
     Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
+    condition_era=Input(rid="ri.foundry.main.dataset.52d99538-b41d-4cb8-887a-9ac775c829f3"),
     condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
     person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 from pyspark.sql import functions as F
 
-def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Standard_train):
-    person_test = person
-    person_test_ind = person_test.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
-    train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
-    
-    #38,044 people have conditions in the condition_era table
-    condition_outcome = condition_era_train.join(Long_COVID_Silver_Standard_train, 'person_id','inner')
-    df = condition_outcome.drop('data_partner_id').join(train_test, 'person_id', 'inner')
+def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Standard_train, condition_era, Long_COVID_Silver_Standard_Blinded):
+    #Join test/train for persons
+    person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
+    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
+    return person_train_test
+    # #Join test/train for condition_eras
+    # condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
+
+    # #Join test/train for outcomes
+    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+
+    # #38,044 people have conditions in the condition_era table
+    # condition_outcome = condition_era_train.join(Long_COVID_Silver_Standard_train, 'person_id','inner')
+    # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9"),

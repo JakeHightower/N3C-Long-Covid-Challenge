@@ -181,16 +181,6 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
     return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.b4a128cf-65dd-4aff-bd7f-4ee075464662"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
-)
-#Outputs users who have only condition_eras that have no match to CCSR (as opposed to some that have matches and some that don't)
- def person_count(no_icd_match, icd_match):
-    no = no_icd_match.dropDuplicates(['person_id'])
-    yes = icd_match.dropDuplicates(['person_id'])
-    return no.join(yes, 'person_id', 'left_anti')
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
     mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c"),
     person_condition=Input(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9")

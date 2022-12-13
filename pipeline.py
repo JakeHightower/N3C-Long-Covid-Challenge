@@ -55,15 +55,6 @@ def conditions_only(pivot_by_person, cci_join):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.9983da15-9e7d-4d73-9ae3-da74847b93fc"),
-    duplicate_icds=Input(rid="ri.foundry.main.dataset.9879cf19-e3bf-496d-91a8-9fd05140bde6")
-)
-#condition_era_id = 1000050713616695994, person_id=8904989188366942906
-
-def duplicate_example(duplicate_icds):
-    return duplicate_icds.filter(duplicate_icds.condition_era_id==1000050713616695994)    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.9879cf19-e3bf-496d-91a8-9fd05140bde6"),
     icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )

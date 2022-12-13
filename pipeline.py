@@ -121,20 +121,22 @@ from pyspark.sql import functions as F
 
 def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Standard_train, condition_era, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
-    # person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
-    # person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
+    person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
+    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
     
-    # person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
+    person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
 
-    # #Join test/train for outcomes
-    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
-    # outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
+    #Join test/train for outcomes
+    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
     #Join test/train for condition_eras
     condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
     condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
     
-    return condition_train_test
+    person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
+    return person_outcome
+    
     # #38,044 people have conditions in the condition_era table
     # condition_outcome = condition_train_test.join(outcome_train_test, 'person_id','inner')
     # # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')

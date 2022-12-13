@@ -106,15 +106,6 @@ def duplicate_icds(icd_match):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.1408546e-c5b8-4119-b8d1-b41fc5d7cb9e"),
-    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
-)
-from pyspark.sql import functions as F
-
-def frequency_all(no_icd_match):
-    return no_icd_match.groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )

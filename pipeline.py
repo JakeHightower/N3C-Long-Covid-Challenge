@@ -1,9 +1,9 @@
 
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.2d0dc8c6-248b-41c3-b06f-be288eea5683"),
+    Output(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
     concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
-    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855")
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )
 #There is a general CCI codeset_id that matches to the measurement table. This indicates that the measurement is from CCI, not using for now (codeset_id=2351618)
 #CCI codeset from appendix here: https://static-content.springer.com/esm/art%3A10.1186%2Fs12879-022-07776-7/MediaObjects/12879_2022_7776_MOESM1_ESM.pdf
@@ -40,9 +40,9 @@ def cci_join(icd_match, concept_set_members):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.135459d9-ff11-45b7-be37-2e2552c4a89a"),
-    cci_join=Input(rid="ri.vector.main.execute.2d0dc8c6-248b-41c3-b06f-be288eea5683"),
-    pivot_by_person=Input(rid="ri.vector.main.execute.ceecf240-b697-4628-94de-8ac0dba046ca")
+    Output(rid="ri.foundry.main.dataset.cb07b6ff-9f7a-4fbe-9769-bdbbc922fc9d"),
+    cci_join=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
+    pivot_by_person=Input(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020")
 )
 from pyspark.sql import functions as F
 
@@ -56,7 +56,7 @@ def conditions_only(pivot_by_person, cci_join):
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.9983da15-9e7d-4d73-9ae3-da74847b93fc"),
-    duplicate_icds=Input(rid="ri.vector.main.execute.bf34a516-47c9-44b2-a70f-421f24eb5d64")
+    duplicate_icds=Input(rid="ri.foundry.main.dataset.9879cf19-e3bf-496d-91a8-9fd05140bde6")
 )
 #condition_era_id = 1000050713616695994, person_id=8904989188366942906
 
@@ -64,8 +64,8 @@ def duplicate_example(duplicate_icds):
     return duplicate_icds.filter(duplicate_icds.condition_era_id==1000050713616695994)    
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.bf34a516-47c9-44b2-a70f-421f24eb5d64"),
-    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855")
+    Output(rid="ri.foundry.main.dataset.9879cf19-e3bf-496d-91a8-9fd05140bde6"),
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
@@ -115,24 +115,8 @@ def duplicate_icds(icd_match):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.cf3f475a-ff06-4a9c-8c4e-6c86669794c9")
-)
-#No longer using this code but pieces of it are in other cells. Can erase eventually.
-
-#If there are multiple rows per condition_era, taking the first one. Doing this temporarily until find some other solution.
-from pyspark.sql.window import Window
-from pyspark.sql.functions import col, row_number, when, concat, lit
-
-def first_row_pp(): 
-    final_deduplicate_cssrs = cci_join
-    w2 = Window.partitionBy("condition_era_id").orderBy(col("default_ccsr_category_op_clean"))
-    df = final_deduplicate_cssrs.withColumn("row",row_number().over(w2)) \
-    .filter(col("row") == 1).drop("row")
-    return df.withColumn("pre_post_condition", concat(df.pre_post_covid, lit('_'), df.default_ccsr_category_op_clean))
-
-@transform_pandas(
     Output(rid="ri.vector.main.execute.1408546e-c5b8-4119-b8d1-b41fc5d7cb9e"),
-    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
 )
 from pyspark.sql import functions as F
 
@@ -140,8 +124,8 @@ def frequency_all(no_icd_match):
     return no_icd_match.groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.0d7687bf-d562-40e5-81e2-1b4fa90fffd7"),
-    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+    Output(rid="ri.foundry.main.dataset.d8dee605-bf22-4277-9b51-fe7a0a2a0319"),
+    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
 )
 from pyspark.sql import functions as F
 
@@ -149,8 +133,8 @@ def frequency_long_covid(no_icd_match):
     return no_icd_match.filter(no_icd_match.pasc_code_after_four_weeks==1).groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
-    person_mapped=Input(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f")
+    Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
+    person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
@@ -175,14 +159,14 @@ def icd_match(person_mapped):
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.9180ee4f-3b1a-46f2-8bdb-be5b381abef9"),
-    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
 )
 def manually_coded_conds(no_icd_match):
     #Adding 2 manually coded conditions back into the mix
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c"),
+    Output(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c"),
     DXCCSR_v2021_2=Input(rid="ri.foundry.main.dataset.5a6e7797-98f7-4ab8-b4e9-8c8fe4de6d4c"),
     concept=Input(rid="ri.foundry.main.dataset.5cb3c4a3-327a-47bf-a8bf-daf0cafe6772"),
     concept_relationship=Input(rid="ri.foundry.main.dataset.0469a283-692e-4654-bb2e-26922aff9d71")
@@ -211,17 +195,17 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     # return concept_icd10.groupBy('valid_end_date').count()
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.435e8f4b-b69c-49ee-adf4-9467fb8cca6a"),
-    person_all=Input(rid="ri.vector.main.execute.600acb7d-9609-46a3-9da2-cff8a471e152")
+    Output(rid="ri.foundry.main.dataset.30923290-5730-44fb-af0d-e0db898d8190"),
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
 def no_conditions(person_all, condition_era_all):
     #19,628 people don't have any rows in condition_era table 
     return person_all.join(condition_era_all, person_all.person_id == condition_era_all.person_id, how='left_anti') 
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df"),
-    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
-    person_mapped=Input(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f")
+    Output(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f"),
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
+    person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )
 from pyspark.sql import functions as F
 
@@ -232,8 +216,8 @@ def no_icd_match(person_mapped, icd_match):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.c91cb327-cf16-473b-9ec3-a8ceec0398ba"),
-    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+    Output(rid="ri.foundry.main.dataset.978ffea4-f41d-4447-8627-a067f41f16de"),
+    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
 )
 from pyspark.sql import functions as F
 
@@ -242,7 +226,7 @@ def no_icd_match_duplicates(no_icd_match):
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.31690664-c9f6-44ac-95c3-2db4c9ef15cf"),
-    mapped_concepts=Input(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c")
+    mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c")
 )
 #Connected to duplicate_example box
 def odd_mapping(mapped_concepts):
@@ -251,18 +235,18 @@ def odd_mapping(mapped_concepts):
     
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.600acb7d-9609-46a3-9da2-cff8a471e152"),
-    person_test_ind=Input(rid="ri.vector.main.execute.9e84c413-83e6-4f58-aa9c-6cd2a71674ff"),
+    Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
+    person_test_ind=Input(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 def person_all(person_test_ind, person_train):
     return person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.b301a068-50e2-4187-aea4-0314d9429ad8"),
+    Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9"),
     Long_COVID_Silver_Standard=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
     condition_era=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
-    person_all=Input(rid="ri.vector.main.execute.600acb7d-9609-46a3-9da2-cff8a471e152")
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
 from pyspark.sql import functions as F
 
@@ -272,9 +256,9 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
     return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.dcdad9bf-abec-40a7-9c13-57aba4b7973c"),
-    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855"),
-    no_icd_match=Input(rid="ri.vector.main.execute.3ddc4744-e58d-4835-aa93-38c3c898b1df")
+    Output(rid="ri.foundry.main.dataset.b4a128cf-65dd-4aff-bd7f-4ee075464662"),
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
+    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
 )
 #Outputs users who have only condition_eras that have no match to CCSR (as opposed to some that have matches and some that don't)
  def person_count(no_icd_match, icd_match):
@@ -283,16 +267,16 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
     return no.join(yes, 'person_id', 'left_anti')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.80e302b7-3a7b-491a-882a-12086f468c6f"),
-    mapped_concepts=Input(rid="ri.vector.main.execute.296f5a26-0ada-4c63-aa3f-f194f6c1f22c"),
-    person_condition=Input(rid="ri.vector.main.execute.b301a068-50e2-4187-aea4-0314d9429ad8")
+    Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
+    mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c"),
+    person_condition=Input(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9")
 )
 def person_mapped(person_condition, mapped_concepts):
     # ltd_df = person_condition.limit(200)
     return person_condition.join(mapped_concepts, person_condition.condition_concept_id==mapped_concepts.concept_id_2,'left')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.9e84c413-83e6-4f58-aa9c-6cd2a71674ff"),
+    Output(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
     person_test=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
 )
 from pyspark.sql import functions as F
@@ -302,8 +286,8 @@ def person_test_ind(person_test):
     return person_test.withColumn('test_ind', F.lit(1))
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.ceecf240-b697-4628-94de-8ac0dba046ca"),
-    cci_join=Input(rid="ri.vector.main.execute.2d0dc8c6-248b-41c3-b06f-be288eea5683")
+    Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),
+    cci_join=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b")
 )
 #pivot data example pulled from: /UNITE/N3C Training Area/Practice Area - Public and Example Data/Machine learning examples/synthea_RF/conditions_and_demographics_synthea_dialysis_RF/RandomForest_Dialysis_Synthea
 
@@ -325,8 +309,8 @@ def pivot_by_person(cci_join):
     # return df_ccsr.join(df_cci, ["person_id"], 'left').fillna(0)
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.b816b156-d14a-4ab4-9478-ce6de6e18baf"),
-    icd_match=Input(rid="ri.vector.main.execute.96ee7feb-6634-42e5-b423-7c2baa1e0855")
+    Output(rid="ri.foundry.main.dataset.52483d94-244c-4b0a-9825-83de612ba335"),
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )
 from pyspark.sql import functions as F
 

@@ -55,57 +55,6 @@ def conditions_only(pivot_by_person, cci_join):
     
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.9879cf19-e3bf-496d-91a8-9fd05140bde6"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
-)
-from pyspark.sql import functions as F
-from pyspark.sql.window import Window
-
-def duplicate_icds(icd_match):
-    #All duplicates
-    duplicate_icds = icd_match.groupBy("condition_era_id").count().filter("count > 1").join(icd_match, 'condition_era_id', 'left').sort(F.desc("count"))
-    
-    # duplicate_icds.select(F.countDistinct("person_id")).show() #26,158 - Distinct number of people with duplicates
-    duplicate_icds.select(F.countDistinct("condition_era_id")).show() # - Distinct condition eras with duplicates
-
-    #Take the icd10cm_clean thats shorter since that's likely the broader category. Create column to count the length of ICD code
-    duplicate_icds = duplicate_icds.withColumn('icd_length', F.length("icd10cm_clean")) 
-    
-    #List of all condition_era_ids that contain a PRG
-    # prg_eras=duplicate_icds.filter(duplicate_icds.default_ccsr_category_op_clean=='PRG').rdd.map(lambda x: x.condition_era_id).collect()  
-    # prg = duplicate_icds.filter(duplicate_icds.condition_era_id.isin(prg_eras)) #Condition eras that contain a pregnancy code
-    # no_prg = duplicate_icds.filter(~duplicate_icds.condition_era_id.isin(prg_eras)) #Condition eras that don't contain a pregnancy code
-    
-    #Sort by length of icd code and then choose the row with shortest icd code length (first row). If multiple rows in a condition era are the same length, this takes the first
-    w2 = Window.partitionBy("condition_era_id").orderBy(F.col("icd_length"))
-    one_row_pp = duplicate_icds.withColumn("row",F.row_number().over(w2)) \
-    .filter(F.col("row") == 1).drop("row")
-
-    return one_row_pp
-    # prg.select(F.countDistinct("condition_era_id")).show() #Distinct condition eras containing pregnancy
-    # no_prg_1row.select(F.countDistinct("condition_era_id")).show() #Distinct condition eras that did not contain pregnancies 
-    # no_prg_1row.show(30)
-    # return prg
-
-    # return no_prg.groupBy('condition_era_id').agg(F.min('icd_length').alias('B'))
-    
-    
-
-    
-    
-    #Note: people can only have 1 condition_concept_id per condition_era_id. If they sought care in the same time period for multiple conditions then those are recorded in separate condition_era_ids.
-    
-    # print(icd_dups.select(F.countDistinct("person_id")).show()) #29,401 person_ids have multiple icd groups
-    # return icd_dups.sort("condition_era_id")
-    # icd_dups_legit = icd_dups.filter(icd_dups.default_ccsr_category_op_clean!='XXX111').sort("condition_era_id") #Removing ccsr category that is not legit
-    
-    # test = icd_dups_legit.exceptAll(icd_dups_legit.dropDuplicates(['condition_era_id'])
-
-    # print(test.select(F.countDistinct("person_id")).show())  #24,551 have duplicates now
-    # return test
-    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )

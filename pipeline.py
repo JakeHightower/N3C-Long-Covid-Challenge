@@ -128,7 +128,7 @@ def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Stan
 
     #Join test/train for outcomes
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
-    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNull()) #DELETE FOR FINAL
+    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
     return outcome_train_test
     # #Join test/train for condition_eras

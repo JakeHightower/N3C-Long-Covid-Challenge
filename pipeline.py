@@ -126,10 +126,11 @@ def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Stan
     
     person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
 
-    return person_train
     #Join test/train for outcomes
-    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNull()) #DELETE FOR FINAL
 
+    return outcome_train_test
     # #Join test/train for condition_eras
     # condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
 

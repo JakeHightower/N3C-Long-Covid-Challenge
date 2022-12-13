@@ -110,22 +110,26 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
-    person_test_ind=Input(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
+from pyspark.sql import functions as F
+
 def person_all(person_test_ind, person_train):
+    person_test_ind = person_test.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
     return person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9"),
-    Long_COVID_Silver_Standard=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
-    condition_era=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
+    Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
+    condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
     person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
 from pyspark.sql import functions as F
 
 #38,044 people have conditions in the condition_era table
-def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
+def person_condition(person_all, condition_era_train, Long_COVID_Silver_Standard_train):
+    Long_COVID_Silver_Standard = Long_COVID_Silver_Standard_train
+    condition_era = condition_era_train
     condition_outcome = condition_era.join(Long_COVID_Silver_Standard, 'person_id','inner')
     return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
 
@@ -137,16 +141,6 @@ def person_condition(person_all, condition_era, Long_COVID_Silver_Standard):
 def person_mapped(person_condition, mapped_concepts):
     # ltd_df = person_condition.limit(200)
     return person_condition.join(mapped_concepts, person_condition.condition_concept_id==mapped_concepts.concept_id_2,'left')
-
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.c0e75ec0-a93c-4551-8913-c85f2ae17794"),
-    person_test=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
-)
-from pyspark.sql import functions as F
-
-def person_test_ind(person_test):
-    #Adding indicator that this person is part of the test set
-    return person_test.withColumn('test_ind', F.lit(1))
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),

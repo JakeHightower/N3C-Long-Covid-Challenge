@@ -115,15 +115,6 @@ def frequency_all(no_icd_match):
     return no_icd_match.groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.d8dee605-bf22-4277-9b51-fe7a0a2a0319"),
-    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
-)
-from pyspark.sql import functions as F
-
-def frequency_long_covid(no_icd_match):
-    return no_icd_match.filter(no_icd_match.pasc_code_after_four_weeks==1).groupBy('condition_concept_name', 'condition_concept_id').count().sort(F.desc("count"))
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )

@@ -160,14 +160,6 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     # return concept_icd10.groupBy('valid_end_date').count()
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.30923290-5730-44fb-af0d-e0db898d8190"),
-    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
-)
-def no_conditions(person_all, condition_era_all):
-    #19,628 people don't have any rows in condition_era table 
-    return person_all.join(condition_era_all, person_all.person_id == condition_era_all.person_id, how='left_anti') 
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f"),
     icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")

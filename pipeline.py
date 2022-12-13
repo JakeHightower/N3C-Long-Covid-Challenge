@@ -131,14 +131,6 @@ def icd_match(person_mapped):
     .filter(F.col("row") == 1).drop("row")
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.9180ee4f-3b1a-46f2-8bdb-be5b381abef9"),
-    no_icd_match=Input(rid="ri.foundry.main.dataset.aa892cdc-277b-4c4b-be29-33922d77941f")
-)
-def manually_coded_conds(no_icd_match):
-    #Adding 2 manually coded conditions back into the mix
-    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c"),
     DXCCSR_v2021_2=Input(rid="ri.foundry.main.dataset.5a6e7797-98f7-4ab8-b4e9-8c8fe4de6d4c"),
     concept=Input(rid="ri.foundry.main.dataset.5cb3c4a3-327a-47bf-a8bf-daf0cafe6772"),

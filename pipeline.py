@@ -123,16 +123,20 @@ def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Stan
     #Join test/train for persons
     person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
     person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
-    return person_train_test
+    
+    person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
+
+    return person_train
+    #Join test/train for outcomes
+    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+
     # #Join test/train for condition_eras
     # condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
 
-    # #Join test/train for outcomes
-    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
-
+    
     # #38,044 people have conditions in the condition_era table
-    # condition_outcome = condition_era_train.join(Long_COVID_Silver_Standard_train, 'person_id','inner')
-    # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
+    # condition_outcome = condition_train_test.join(outcome_train_test, 'person_id','inner')
+    # # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9"),

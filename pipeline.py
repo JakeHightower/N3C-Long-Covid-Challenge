@@ -308,12 +308,3 @@ def pivot_by_person(cci_join):
     # df_cci = first_row_pp.filter(first_row_pp.pre_post_cci_condition.isNotNull()).groupBy("person_id").pivot("pre_post_cci_condition").agg(F.lit(1)).fillna(0) 
     # return df_ccsr.join(df_cci, ["person_id"], 'left').fillna(0)
 
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.52483d94-244c-4b0a-9825-83de612ba335"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
-)
-from pyspark.sql import functions as F
-
-def unacceptable_diagnoses(icd_match):
-    return icd_match.filter(icd_match.default_ccsr_category_op_clean=='XXX111').groupBy('icd10cm_clean').count().sort(F.desc("count"))
-

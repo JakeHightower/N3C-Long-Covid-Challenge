@@ -40,11 +40,8 @@ def cci_count(icd_match, concept_set_members, person_all):
 def cohort(conditions_only, person_all, medications_vaccinations, covid_severity):
     columns_to_drop = ['location_id', 'person_data_partner_id', 'gender_concept_id', 'race_concept_id', 'ethnicity_concept_id', 'bmi', 'state', 'bmi_cat', 'race_concept_name', 'gender_concept_name', 'ethnicity_concept_name']
     person = person_all.select('person_id', 'test_ind', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
-    
-    
-    merged = person.join(conditions_only, 'person_id', 'left').join(medications_vaccinations, 'person_id', 'left').join(covid_severity, 'person_id', 'left')#.drop(*columns_to_drop)
-    #return merged.fillna(0, subset=(merged.columns[10:-1]))
-    return merged
+    merged = person.join(conditions_only, 'person_id', 'left').join(medications_vaccinations, 'person_id', 'left').join(covid_severity, 'person_id', 'left')
+    return merged.fillna(0, subset=(merged.columns[8:-1]))
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),

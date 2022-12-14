@@ -42,8 +42,9 @@ def cohort(conditions_only, person_all, medications_vaccinations, covid_severity
     person = person_all.select('person_id', 'test_ind', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
     
     
-    merged = person.join(conditions_only, 'person_id', 'left').join(Add_drugs, 'person_id', 'left').join(Severity, 'person_id', 'left').drop(*columns_to_drop)
-    return merged.fillna(0, subset=(merged.columns[10:-1]))
+    merged = person.join(conditions_only, 'person_id', 'left').join(medications_vaccinations, 'person_id', 'left').join(covid_severity, 'person_id', 'left')#.drop(*columns_to_drop)
+    #return merged.fillna(0, subset=(merged.columns[10:-1]))
+    return merged
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),

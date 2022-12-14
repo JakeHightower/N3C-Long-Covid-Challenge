@@ -61,6 +61,8 @@ def conditions_only(pivot_by_person, cci_count):
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.0791f5da-f1fb-47d0-bc39-b910d43e0b73"),
     concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
+    condition_occurrence=Input(rid="ri.foundry.main.dataset.3e01546f-f110-4c67-a6db-9063d2939a74"),
+    condition_occurrence_train=Input(rid="ri.foundry.main.dataset.2f496793-6a4e-4bf4-b0fc-596b277fb7e2"),
     microvisits_to_macrovisits=Input(rid="ri.foundry.main.dataset.f5008fa4-e736-4244-88e1-1da7a68efcdb"),
     microvisits_to_macrovisits_train=Input(rid="ri.foundry.main.dataset.d77a701f-34df-48a1-a71c-b28112a07ffa"),
     observation=Input(rid="ri.foundry.main.dataset.fc1ce22e-9cf6-4335-8ca7-aa8c733d506d"),
@@ -70,18 +72,21 @@ def conditions_only(pivot_by_person, cci_count):
     procedure_occurrence_train=Input(rid="ri.foundry.main.dataset.9a13eb06-de7d-482b-8f91-fb8c144269e3")
 )
 #Severity based on WHO guidelines
-def covid_severity(observation_train, observation, microvisits_to_macrovisits_train, microvisits_to_macrovisits, procedure_occurrence_train, concept_set_members, procedure_occurrence, person_all):
+def covid_severity(observation_train, observation, microvisits_to_macrovisits_train, microvisits_to_macrovisits, procedure_occurrence_train, concept_set_members, procedure_occurrence, person_all, condition_occurrence_train, condition_occurrence):
+    condition_occurrence_training = condition_occurrence_train
     
     observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True)
     observation_train_test = observation_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
 
-    #Jenny - figure out what the unique key is in the mm datasets
+    #Jenny - figure out what the unique key is in the mm datasets  ****************
     mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True)
     mm_train_test = mm_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
 
     po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
-    po_train_test = mm_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
-    
+    po_train_test = mm_train_test.dropDuplicates(['procedure_occurrence_id']) #DELETE FOR FINAL
+
+    condition_train_test = condition_occurrence_train.unionByName(condition_occurrence, allowMissingColumns=True)
+    condition_train_test = condition_train_test.dropDuplicates(['condition_occurrence_id']) #DELETE FOR FINAL
     
     #Ventilation - compared 2 codeset ids
     #469361388 - [ICU/MODS]IMV (v2) - contains 76 concepts - procedure, observation, condition - this defintion pulled up 6410 rows for 765 people which is way fewer than the 2nd definition although that definition has fewer concepts. 
@@ -93,55 +98,54 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     
     proc_subset = df.join(po_train_test, 'person_id', 'inner').filter(po_train_test.procedure_date >= df.pre_covid_7)
     obs_subset = df.join(observation_train_test, 'person_id', 'inner').filter(observation_train_test.observation_date >= df.pre_covid_7)
-    cond_subset = df.join(condition_occurrence, 'person_id', 'inner').filter(condition_occurrence.condition_start_date >= df.pre_covid_7)
+    cond_subset = df.join(condition_train_test, 'person_id', 'inner').filter(condition_train_test.condition_start_date >= df.pre_covid_7)
     
-    #vent2
-    vent2_concept = concept_set_members.filter(F.col("codeset_id")==618758765)
-    vent2 = proc_subset.join(vent2_concept, proc_subset.procedure_concept_id==vent2_concept.concept_id,'inner')
+    #Ventilation
+    vent_concept = concept_set_members.filter(F.col("codeset_id")==618758765)
+    
+    #vent defintion pulled up 13,106 rows for 1346 people 
+    vent_proc = proc_subset.join(vent_concept, proc_subset.procedure_concept_id==vent_concept.concept_id,'inner')
+    vent_proc.groupBy("procedure_concept_name").count().show(20, False)
+    vent_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
 
-    #vent2 defintion pulled up 13,106 rows for 1346 people 
-    vent2.groupBy("procedure_concept_name").count().show(20, False)
-    vent2.select(F.countDistinct("person_id")).show() #Distinct number of people
-
-    #Pulling in observation table to see if adds anyone new
-    vent2_obs = obs_subset.join(vent2_concept, obs_subset.observation_concept_id==vent2_concept.concept_id,'inner')
-    vent2_obs.groupBy("observation_concept_name").count().show(20, False)
-    vent2_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #Searching observation table for ventilation
+    vent_obs = obs_subset.join(vent_concept, obs_subset.observation_concept_id==vent_concept.concept_id,'inner')
+    vent_obs.groupBy("observation_concept_name").count().show(20, False)
+    vent_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
  
     #Pulling in conditions table
-    vent2_cond = cond_subset.join(vent2_concept, cond_subset.condition_concept_id==vent2_concept.concept_id,'inner')
-    vent2_cond.groupBy("condition_concept_name").count().show(20, False)
-    vent2_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
+    vent_cond = cond_subset.join(vent_concept, cond_subset.condition_concept_id==vent_concept.concept_id,'inner')
+    vent_cond.groupBy("condition_concept_name").count().show(20, False)
+    vent_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
 
-    final_vent = vent2.unionByName(vent2_obs, allowMissingColumns=True).unionByName(vent2_cond, allowMissingColumns=True)
+    final_vent = vent_proc.unionByName(vent_obs, allowMissingColumns=True).unionByName(vent_cond, allowMissingColumns=True)
     final_vent.select(F.countDistinct("person_id")).show() #Distinct number of people
-    
     final_vent = final_vent.dropDuplicates(['person_id'])
 
     #ECMO - 415149730 - procedure, observation tables
     ecmo_concept = concept_set_members.filter(F.col("codeset_id")==415149730)
-    ecmo = proc_subset.join(ecmo_concept, proc_subset.procedure_concept_id==ecmo_concept.concept_id,'inner')
-
+    
     #ecmo defintion pulled up xx rows for xx people 
+    ecmo_proc = proc_subset.join(ecmo_concept, proc_subset.procedure_concept_id==ecmo_concept.concept_id,'inner')
     ecmo.groupBy("procedure_concept_name").count().show(20, False)
     ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     #Pulling in observation table to see if adds anyone new
     ecmo_obs = obs_subset.join(ecmo_concept, obs_subset.observation_concept_id==ecmo_concept.concept_id,'inner')
-    
     ecmo_obs.groupBy("observation_concept_name").count().show(20, False)
     ecmo_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
  
-    final_ecmo = ecmo.unionByName(ecmo_obs, allowMissingColumns=True)
+    final_ecmo = ecmo_proc.unionByName(ecmo_obs, allowMissingColumns=True)
     final_ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
-    
     final_ecmo = final_ecmo.dropDuplicates(['person_id'])
     
     #Creating indicators for users that had either ECMO or IMV
     final_ecmo_vent = final_ecmo.unionByName(final_vent, allowMissingColumns=True).dropDuplicates(['person_id']).withColumn('who_severity', F.lit('Severe')).select('person_id', 'who_severity') 
     
     ecmo_vent_person_ids = final_ecmo_vent.rdd.map(lambda x: x.person_id).collect() #Converting column to list
-      
+
+     #JENNY START HERE
+
     #Logic - if they have a micro/macrovisit that started on or after 7 days before dx test and till the end of FU then mark them as that category
     visit_subset = df.join(microvisits_to_macrovisits, 'person_id', 'inner').filter((~microvisits_to_macrovisits.person_id.isin(ecmo_vent_person_ids)) & ((microvisits_to_macrovisits.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(microvisits_to_macrovisits.visit_start_date, microvisits_to_macrovisits.visit_end_date))|(df.covid_index.between(microvisits_to_macrovisits.macrovisit_start_date, microvisits_to_macrovisits.macrovisit_end_date))))
     

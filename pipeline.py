@@ -158,7 +158,7 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     drug_train_test = create_med_var(697105949, 'covid_vaccine', drug_train_test) 
     
     #Making pre/post groups for Covid vaccine
-    drug_train_test = drug_train_test.join(person_all.keep('person_id', 'covid_index'), 'person_id', 'left')
+    drug_train_test = drug_train_test.join(person_all.select('person_id', 'covid_index'), 'person_id', 'left')
 
     drug_train_test = drug_train_test.withColumn('pre_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")< F.col("covid_index")), 1).otherwise(0))
     drug_train_test = drug_train_test.withColumn('post_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")>= F.col("covid_index")), 1).otherwise(0))
@@ -168,8 +168,8 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     F.sum("post_covid_vaccine").alias("post_covid_vaccine_sum"),\
     F.sum("med_remdesivir").alias("med_remdesivir_sum"),\
     F.sum("med_bebtelovimab").alias("med_bebtelovimab_sum"),\
-    F.sum("med_baricitinib").alias("med_baricitinib_sum"), \
-    F.sum("med_molnupiravir").alias("med_molnupiravir_sum"))
+    F.sum("med_baricitinib").alias("med_baricitinib_sum"))
+
     
 
 @transform_pandas(

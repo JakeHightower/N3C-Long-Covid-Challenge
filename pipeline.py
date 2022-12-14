@@ -55,12 +55,11 @@ def condition_mapped(mapped_concepts, condition_era_train, condition_era):
 from pyspark.sql import functions as F
 
 def conditions_only(pivot_by_person, cci_count):
-    cci_join = cci_count
-    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100)
-    sub100_removed = cci_join.join(sub100, cci_join.pre_post_condition==sub100.condition, 'left_anti')
+    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) #Removing conditions that occur less than 100 time in dataset
+    sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti')
     conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
     #Rejoining with CCI counts
-    return conds.join(cci_join.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
+    return conds.join(cci_count.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
     
 
 @transform_pandas(
@@ -159,23 +158,15 @@ def person_condition():
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),
     cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b")
 )
-#pivot data example pulled from: /UNITE/N3C Training Area/Practice Area - Public and Example Data/Machine learning examples/synthea_RF/conditions_and_demographics_synthea_dialysis_RF/RandomForest_Dialysis_Synthea
-
 from pyspark.sql import functions as F
 import pandas as pd
 
 #Pivoting and then counting the occurrence of each pre/post condition 
 def pivot_by_person(cci_count):
-    cci_join = cci_count
-    df = cci_join.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
+    df = cci_count.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
 
     df_sum = df.select(df.columns[1:]) #Grabbing condition columns
     cols = [F.sum(F.col(x)).alias(x) for x in df_sum.columns]
     agg_df = df_sum.agg(*cols).toPandas()
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
-    
-    
-    
-    # df_cci = first_row_pp.filter(first_row_pp.pre_post_cci_condition.isNotNull()).groupBy("person_id").pivot("pre_post_cci_condition").agg(F.lit(1)).fillna(0) 
-    # return df_ccsr.join(df_cci, ["person_id"], 'left').fillna(0)
 

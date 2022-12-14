@@ -78,9 +78,8 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True)
     observation_train_test = observation_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
 
-    #Jenny - figure out what the unique key is in the mm datasets  ****************
     mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True)
-    mm_train_test = mm_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
+    mm_train_test = mm_train_test.dropDuplicates(['visit_occurrence_id']) #DELETE FOR FINAL
 
     po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
     po_train_test = mm_train_test.dropDuplicates(['procedure_occurrence_id']) #DELETE FOR FINAL
@@ -144,13 +143,10 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     
     ecmo_vent_person_ids = final_ecmo_vent.rdd.map(lambda x: x.person_id).collect() #Converting column to list
 
-     #JENNY START HERE
-
     #Logic - if they have a micro/macrovisit that started on or after 7 days before dx test and till the end of FU then mark them as that category
-    visit_subset = df.join(microvisits_to_macrovisits, 'person_id', 'inner').filter((~microvisits_to_macrovisits.person_id.isin(ecmo_vent_person_ids)) & ((microvisits_to_macrovisits.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(microvisits_to_macrovisits.visit_start_date, microvisits_to_macrovisits.visit_end_date))|(df.covid_index.between(microvisits_to_macrovisits.macrovisit_start_date, microvisits_to_macrovisits.macrovisit_end_date))))
+    visit_subset = df.join(mm_train_test, 'person_id', 'inner').filter((~mm_train_test.person_id.isin(ecmo_vent_person_ids)) & ((mm_train_test.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(mm_train_test.visit_start_date, mm_train_test.visit_end_date))|(df.covid_index.between(mm_train_test.macrovisit_start_date, mm_train_test.macrovisit_end_date))))
     
-    #Take the most severe visit pp during that time frame. Do we think its safe to assume that if someone did not have a hospital admission that they had a mild case? They could have just gone to a hospital elsewhere.
-    #This is going to collapse out the date but was going to get rid of it anyways
+    #Take the most severe visit per person during 7 days pre covid diagnosis to the end of follow up
     visit_grouped = visit_subset.groupby("person_id").agg(F.concat_ws(", ", F.collect_list(visit_subset.visit_concept_name)).alias("concat_visit_concept_name"))
     visit_grouped = visit_grouped.withColumn("who_severity", F.when(visit_grouped.concat_visit_concept_name.contains("Inpatient"), "Moderate").otherwise('Mild'))
 

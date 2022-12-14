@@ -55,8 +55,9 @@ def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, 
 def condition_mapped(mapped_concepts, condition_era_train, condition_era):
     #Join test/train for condition_eras
     condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
-    condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
-    return condition_train_test.join(mapped_concepts, condition_train_test.condition_concept_id==mapped_concepts.concept_id_2,'left')
+    return condition_train_test
+    # condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
+    # return condition_train_test.join(mapped_concepts, condition_train_test.condition_concept_id==mapped_concepts.concept_id_2,'left')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.cb07b6ff-9f7a-4fbe-9769-bdbbc922fc9d"),

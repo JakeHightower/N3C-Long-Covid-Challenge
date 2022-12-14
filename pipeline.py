@@ -71,6 +71,8 @@ def conditions_only(pivot_by_person, cci_count):
     procedure_occurrence=Input(rid="ri.foundry.main.dataset.88523aaa-75c3-4b55-a79a-ebe27e40ba4f"),
     procedure_occurrence_train=Input(rid="ri.foundry.main.dataset.9a13eb06-de7d-482b-8f91-fb8c144269e3")
 )
+from pyspark.sql import functions as F
+
 #Severity based on WHO guidelines
 def covid_severity(observation_train, observation, microvisits_to_macrovisits_train, microvisits_to_macrovisits, procedure_occurrence_train, concept_set_members, procedure_occurrence, person_all, condition_occurrence_train, condition_occurrence):
     condition_occurrence_training = condition_occurrence_train

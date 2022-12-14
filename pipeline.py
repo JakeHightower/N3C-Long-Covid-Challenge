@@ -43,6 +43,7 @@ def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, 
 )
 def condition_mapped(mapped_concepts, condition_era_train, condition_era):
     #Join test/train for condition_eras
+    #38,044 people have conditions in the condition_era_train table
     condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
     condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
     return condition_train_test.join(mapped_concepts, condition_train_test.condition_concept_id==mapped_concepts.concept_id_2,'left')
@@ -136,11 +137,37 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
     
     person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
+    
+    #Cleaning demographics
+    #UDF to clean race variable
+    def race_func(race_col):
+        if race_col in ['Black or African American', 'Black']:
+            return 'African American'
+        if race_col in ['Other Race', 'Multiple races', 'More than one race', 'Hispanic', "Multiple race", 'Asian Indian']:
+            return "Other"
+        if (race_col in ['No information', 'Unknown racial group', 'No matching concept', 'Refuse to answer', None]):
+            return 'Unknown'
+        if race_col in ['Asian', 'Other Pacific Islander', 'Chinese', 'Native Hawaiian or Other Pacific Islander']:
+            return 'Asian or Pacific islander'
+        else: 
+            return race_col
+
+    func_udf = F.udf(race_func)
+    person_outcome = person_outcome.withColumn('race_cats',func_udf(person_outcome['race_concept_name']))
+    #Removing spaces for when making dummy variables
+    person_outcome = person_outcome.withColumn('race_cats', F.regexp_replace('race_cats', ' ', '_'))
+    person_outcome.groupBy('race_cats').count().show(20, False) #Total count
+
+    #Cleaning ethnicity
+    person_outcome=person_outcome.withColumn("ethnicity_cats", F.when(F.col("ethnicity_concept_name").isin(['Other/Unknown', 'No matching concept', 'Unknown', 'No information', 'Other']), 'Other_unknown').otherwise(F.col("ethnicity_concept_name"))) 
+    person_outcome = person_outcome.withColumn('ethnicity_cats', F.regexp_replace('ethnicity_cats', ' ', '_'))
+
+    #Cleaning gender
+    person_outcome=person_outcome.withColumn("gender_cats", F.when(F.col("gender_concept_name").isin(['UNKNOWN', 'No matching concept']), 'MALE').otherwise(F.col("gender_concept_name"))) 
+    person_outcome = person_outcome.withColumn('gender_cats', F.regexp_replace('gender_cats', ' ', '_'))
+
     return person_outcome
     
-    # #38,044 people have conditions in the condition_era table
-    # condition_outcome = condition_train_test.join(outcome_train_test, 'person_id','inner')
-    # # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),

@@ -143,18 +143,6 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     # # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9")
-)
-from pyspark.sql import functions as F
-
-#38,044 people have conditions in the condition_era table
-def person_condition():
-    Long_COVID_Silver_Standard = Long_COVID_Silver_Standard_train
-    condition_era = condition_era_train
-    condition_outcome = condition_era.join(Long_COVID_Silver_Standard, 'person_id','inner')
-    return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),
     cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b")
 )

@@ -85,7 +85,7 @@ def icd_match(condition_mapped):
     #Recoding all pregnancy categories into 1 group since they are highly correlated and adding some manual mappings for concepts that did not map directly to ICD10 codes
     condition_mapped = condition_mapped.withColumn('default_ccsr_category_op_clean', F.when(F.col("default_ccsr_category_op_clean").startswith('PRG'), 'PRG').when(F.col("condition_concept_id")==4113821, 'MBD005').when(F.col("condition_concept_id")==4195384, 'SYM013').otherwise(F.col("default_ccsr_category_op_clean")))
 
-    keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name", "covid_index", "pasc_code_after_four_weeks", "pasc_code_prior_four_weeks"]
+    keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name"]
 
     df = condition_mapped.filter((condition_mapped.default_ccsr_category_op_clean.isNotNull()) & (condition_mapped.default_ccsr_category_op_clean!='XXX111')).dropDuplicates(["condition_era_id", "default_ccsr_category_op_clean"]).select(*keep_vars)
 

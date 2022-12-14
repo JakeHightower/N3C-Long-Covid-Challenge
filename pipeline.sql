@@ -6,5 +6,5 @@
 )
 SELECT distinct visit_concept_name
 FROM microvisits_to_macrovisits_train
-where macrovisit_id is null
+where macrovisit_id is not null
 

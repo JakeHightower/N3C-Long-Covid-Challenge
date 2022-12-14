@@ -11,6 +11,6 @@ FROM microvisits_to_macrovisits_train
     Output(rid="ri.vector.main.execute.38a3b53b-0371-4456-a5e6-b0d9f6506e02"),
     DXCCSR_v2021_2=Input(rid="ri.foundry.main.dataset.5a6e7797-98f7-4ab8-b4e9-8c8fe4de6d4c")
 )
-SELECT *
+SELECT count(distinct Default_CCSR_CATEGORY_DESCRIPTION_OP)
 FROM DXCCSR_v2021_2
 

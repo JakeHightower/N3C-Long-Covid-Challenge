@@ -19,6 +19,6 @@ FROM DXCCSR_v2021_2
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 SELECT count(gender_concept_name), gender_concept_name
-FROM person
+FROM person_train
 group by gender_concept_name
 

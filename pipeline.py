@@ -119,7 +119,7 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     vent_cond.groupBy("condition_concept_name").count().show(20, False)
     vent_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
 
-    final_vent = vent_proc.drop('data_partner_id', 'provider_id').unionByName(vent_obs, allowMissingColumns=True).unionByName(vent_cond.drop('data_partner_id', 'provider_id'), allowMissingColumns=True)
+    final_vent = vent_proc.drop('data_partner_id', 'provider_id').unionByName(vent_obs.drop('data_partner_id', 'provider_id'), allowMissingColumns=True).unionByName(vent_cond.drop('data_partner_id', 'provider_id'), allowMissingColumns=True)
     final_vent.select(F.countDistinct("person_id")).show() #Distinct number of people
     final_vent = final_vent.dropDuplicates(['person_id'])
 

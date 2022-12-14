@@ -17,11 +17,7 @@ def cci_count(icd_match, concept_set_members, person_all):
 
     cci = cci_person.filter(cci_person.concept_set_name.isNotNull()).dropDuplicates(['person_id', 'concept_set_name']).groupBy('person_id').count().withColumnRenamed("count", "cci_count")    
     
-    #Join test/train for outcomes
-    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
-    # outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
-
-    icd_outcome = icd_match.join(person_all.keep('person_id', 'covid_index'), 'person_id', 'left')
+    icd_outcome = icd_match.join(person_all.select('person_id', 'covid_index'), 'person_id', 'left')
 
     #Adding time component (pre/post) to CCSR categories
     icd_outcome = icd_outcome.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 

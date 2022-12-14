@@ -14,11 +14,3 @@ FROM microvisits_to_macrovisits_train
 SELECT count(distinct Default_CCSR_CATEGORY_DESCRIPTION_OP)
 FROM DXCCSR_v2021_2
 
-@transform_pandas(
-    Output(rid="ri.vector.main.execute.ba29d7b1-bb25-4c44-9338-5b585c649ae8"),
-    person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
-)
-SELECT count(gender_concept_name), gender_concept_name
-FROM person_train
-group by gender_concept_name
-

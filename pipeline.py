@@ -128,8 +128,8 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     
     #ecmo defintion pulled up xx rows for xx people 
     ecmo_proc = proc_subset.join(ecmo_concept, proc_subset.procedure_concept_id==ecmo_concept.concept_id,'inner')
-    ecmo.groupBy("procedure_concept_name").count().show(20, False)
-    ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
+    ecmo_proc.groupBy("procedure_concept_name").count().show(20, False)
+    ecmo_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     #Pulling in observation table to see if adds anyone new
     ecmo_obs = obs_subset.join(ecmo_concept, obs_subset.observation_concept_id==ecmo_concept.concept_id,'inner')

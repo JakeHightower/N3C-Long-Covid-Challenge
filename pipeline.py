@@ -59,6 +59,104 @@ def conditions_only(pivot_by_person, cci_count):
     
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.0791f5da-f1fb-47d0-bc39-b910d43e0b73"),
+    concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
+    microvisits_to_macrovisits=Input(rid="ri.foundry.main.dataset.f5008fa4-e736-4244-88e1-1da7a68efcdb"),
+    microvisits_to_macrovisits_train=Input(rid="ri.foundry.main.dataset.d77a701f-34df-48a1-a71c-b28112a07ffa"),
+    observation=Input(rid="ri.foundry.main.dataset.fc1ce22e-9cf6-4335-8ca7-aa8c733d506d"),
+    observation_train=Input(rid="ri.foundry.main.dataset.f9d8b08e-3c9f-4292-b603-f1bfa4336516"),
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
+    procedure_occurrence=Input(rid="ri.foundry.main.dataset.88523aaa-75c3-4b55-a79a-ebe27e40ba4f"),
+    procedure_occurrence_train=Input(rid="ri.foundry.main.dataset.9a13eb06-de7d-482b-8f91-fb8c144269e3")
+)
+#Severity based on WHO guidelines
+def covid_severity(observation_train, observation, microvisits_to_macrovisits_train, microvisits_to_macrovisits, procedure_occurrence_train, concept_set_members, procedure_occurrence, person_all):
+    
+    observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True)
+    observation_train_test = observation_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
+
+    #Jenny - figure out what the unique key is in the mm datasets
+    mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True)
+    mm_train_test = mm_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
+
+    po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
+    po_train_test = mm_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
+    
+    
+    #Ventilation - compared 2 codeset ids
+    #469361388 - [ICU/MODS]IMV (v2) - contains 76 concepts - procedure, observation, condition - this defintion pulled up 6410 rows for 765 people which is way fewer than the 2nd definition although that definition has fewer concepts. 
+    #618758765 - N3C Mechanical Ventilation (v1) - contains 38 concepts and used for CC project - procedure, observation, condition. Using this definition bc it pulled up more instances and it was used for the cohort characterization paper. 
+
+    #Looking at 7 days before and 4 weeks after (end of study data) for IMV and ECMO
+    #Pull in data for relevant time periods for each user
+    df = person_all.withColumn('pre_covid_7', F.date_sub(person_all['covid_index'], 7))
+    
+    proc_subset = df.join(po_train_test, 'person_id', 'inner').filter(po_train_test.procedure_date >= df.pre_covid_7)
+    obs_subset = df.join(observation_train_test, 'person_id', 'inner').filter(observation_train_test.observation_date >= df.pre_covid_7)
+    cond_subset = df.join(condition_occurrence, 'person_id', 'inner').filter(condition_occurrence.condition_start_date >= df.pre_covid_7)
+    
+    #vent2
+    vent2_concept = concept_set_members.filter(F.col("codeset_id")==618758765)
+    vent2 = proc_subset.join(vent2_concept, proc_subset.procedure_concept_id==vent2_concept.concept_id,'inner')
+
+    #vent2 defintion pulled up 13,106 rows for 1346 people 
+    vent2.groupBy("procedure_concept_name").count().show(20, False)
+    vent2.select(F.countDistinct("person_id")).show() #Distinct number of people
+
+    #Pulling in observation table to see if adds anyone new
+    vent2_obs = obs_subset.join(vent2_concept, obs_subset.observation_concept_id==vent2_concept.concept_id,'inner')
+    vent2_obs.groupBy("observation_concept_name").count().show(20, False)
+    vent2_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
+ 
+    #Pulling in conditions table
+    vent2_cond = cond_subset.join(vent2_concept, cond_subset.condition_concept_id==vent2_concept.concept_id,'inner')
+    vent2_cond.groupBy("condition_concept_name").count().show(20, False)
+    vent2_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
+
+    final_vent = vent2.unionByName(vent2_obs, allowMissingColumns=True).unionByName(vent2_cond, allowMissingColumns=True)
+    final_vent.select(F.countDistinct("person_id")).show() #Distinct number of people
+    
+    final_vent = final_vent.dropDuplicates(['person_id'])
+
+    #ECMO - 415149730 - procedure, observation tables
+    ecmo_concept = concept_set_members.filter(F.col("codeset_id")==415149730)
+    ecmo = proc_subset.join(ecmo_concept, proc_subset.procedure_concept_id==ecmo_concept.concept_id,'inner')
+
+    #ecmo defintion pulled up xx rows for xx people 
+    ecmo.groupBy("procedure_concept_name").count().show(20, False)
+    ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
+
+    #Pulling in observation table to see if adds anyone new
+    ecmo_obs = obs_subset.join(ecmo_concept, obs_subset.observation_concept_id==ecmo_concept.concept_id,'inner')
+    
+    ecmo_obs.groupBy("observation_concept_name").count().show(20, False)
+    ecmo_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
+ 
+    final_ecmo = ecmo.unionByName(ecmo_obs, allowMissingColumns=True)
+    final_ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
+    
+    final_ecmo = final_ecmo.dropDuplicates(['person_id'])
+    
+    #Creating indicators for users that had either ECMO or IMV
+    final_ecmo_vent = final_ecmo.unionByName(final_vent, allowMissingColumns=True).dropDuplicates(['person_id']).withColumn('who_severity', F.lit('Severe')).select('person_id', 'who_severity') 
+    
+    ecmo_vent_person_ids = final_ecmo_vent.rdd.map(lambda x: x.person_id).collect() #Converting column to list
+      
+    #Logic - if they have a micro/macrovisit that started on or after 7 days before dx test and till the end of FU then mark them as that category
+    visit_subset = df.join(microvisits_to_macrovisits, 'person_id', 'inner').filter((~microvisits_to_macrovisits.person_id.isin(ecmo_vent_person_ids)) & ((microvisits_to_macrovisits.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(microvisits_to_macrovisits.visit_start_date, microvisits_to_macrovisits.visit_end_date))|(df.covid_index.between(microvisits_to_macrovisits.macrovisit_start_date, microvisits_to_macrovisits.macrovisit_end_date))))
+    
+    #Take the most severe visit pp during that time frame. Do we think its safe to assume that if someone did not have a hospital admission that they had a mild case? They could have just gone to a hospital elsewhere.
+    #This is going to collapse out the date but was going to get rid of it anyways
+    visit_grouped = visit_subset.groupby("person_id").agg(F.concat_ws(", ", F.collect_list(visit_subset.visit_concept_name)).alias("concat_visit_concept_name"))
+    visit_grouped = visit_grouped.withColumn("who_severity", F.when(visit_grouped.concat_visit_concept_name.contains("Inpatient"), "Moderate").otherwise('Mild'))
+
+    covid_severity = final_ecmo_vent.unionByName(visit_grouped, allowMissingColumns=True)
+    #Add the users back in that did not have any visits during study (marking them as mild)
+    no_visit = person_all.join(covid_severity, 'person_id', 'left_anti')
+    print(no_visit.count())
+    return covid_severity.unionByName(no_visit, allowMissingColumns=True).fillna('Mild', subset=['who_severity']).select('person_id', 'who_severity')
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     condition_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )
@@ -253,11 +351,4 @@ def pivot_by_person(cci_count):
     cols = [F.sum(F.col(x)).alias(x) for x in df_sum.columns]
     agg_df = df_sum.agg(*cols).toPandas()
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
-
-@transform_pandas(
-    Output(rid="ri.vector.main.execute.6bfa459a-edf7-4fb1-b840-1b14be1e0fe4"),
-    observation_train=Input(rid="ri.foundry.main.dataset.f9d8b08e-3c9f-4292-b603-f1bfa4336516")
-)
-def unnamed(observation_train):
-    
 

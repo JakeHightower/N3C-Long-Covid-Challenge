@@ -254,3 +254,10 @@ def pivot_by_person(cci_count):
     agg_df = df_sum.agg(*cols).toPandas()
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
+@transform_pandas(
+    Output(rid="ri.vector.main.execute.6bfa459a-edf7-4fb1-b840-1b14be1e0fe4"),
+    observation_train=Input(rid="ri.foundry.main.dataset.f9d8b08e-3c9f-4292-b603-f1bfa4336516")
+)
+def unnamed(observation_train):
+    
+

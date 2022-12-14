@@ -22,25 +22,14 @@ def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, 
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
     outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
-    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left').drop(columns=['time_to_pasc'])
+    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left').drop('time_to_pasc')
 
-    return icd_outcome
     #Adding time component (pre/post) to CCSR categories
-    # icd_match = icd_match.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
-    # icd_match = icd_match.withColumn("pre_post_condition", F.concat(icd_match.pre_post_covid, F.lit('_'), icd_match.default_ccsr_category_op_clean)) 
+    icd_outcome = icd_outcome.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
+    icd_outcome = icd_outcome.withColumn("pre_post_condition", F.concat(icd_outcome.pre_post_covid, F.lit('_'), icd_outcome.default_ccsr_category_op_clean)) 
 
-    # #Rejoining with CCSR count column with icd data
-    # cci_ccsr = icd_match.join(cci, 'person_id', 'left').fillna(0, subset=['cci_count'])
-
-    # cci_person.filter((cci_person.concept_set_name.isNotNull()) & (cci_person.person_id==5019396812315161384)).dropDuplicates(['concept_set_name']).show() # This person has 9 CCIs 
-    #Removing spaces and dashes 
-    # cci_person = cci_person.withColumn("concept_set_name_edited", F.regexp_replace("concept_set_name", " ", ''))
-    # cci_person = cci_person.withColumn("concept_set_name_edited", F.regexp_replace("concept_set_name_edited", "-", '_'))  
-    
-    # #Date difference between condition and covid - same as N3C comborbidities paper
-    # cci_person = cci_person.withColumn("condition_to_covid", F.datediff(F.col("condition_era_start_date"), F.col("covid_index")))
-
-    # return cci_ccsr
+    #Rejoining with cci count column with ccsr data
+    return icd_outcome.join(cci, 'person_id', 'left').fillna(0, subset=['cci_count'])
 
     
 

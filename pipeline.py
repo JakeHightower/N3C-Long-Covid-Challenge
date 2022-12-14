@@ -261,8 +261,8 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     #Baricitinib - 911 drug_eras and 594 unique users. Also looked at codeset_id: 394764748 but it produced the same numbers
     drug_train_test = create_med_var(38048732, 'med_baricitinib', drug_train_test) 
     
-    #Molnupiravir - 0 drug_eras and 0 unique users - not using since none found in dataset
-    # drug_train_test = create_med_var(643666235, 'med_molnupiravir', drug_train_test) 
+    #Molnupiravir - 0 drug_eras and 0 unique users
+    drug_train_test = create_med_var(643666235, 'med_molnupiravir', drug_train_test) 
     
     #Covid Vaccinations - 11,466 drug_eras for 7741 unique_users. Also looked at codeset_id: 600531961 but it produced slightly fewer vaccinations. This definition is broader and includes the following drugs and their drug_concept_ids. I researched all of these drugs in Athena and they are valid.
     # SARS-CoV-2 (COVID-19) vaccine, mRNA-BNT162b2 0.1 MG/ML Injectable Suspension [Comirnaty] (1759206)
@@ -283,7 +283,8 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     F.sum("post_covid_vaccine").alias("post_covid_vaccine_sum"),\
     F.sum("med_remdesivir").alias("med_remdesivir_sum"),\
     F.sum("med_bebtelovimab").alias("med_bebtelovimab_sum"),\
-    F.sum("med_baricitinib").alias("med_baricitinib_sum"))
+    F.sum("med_baricitinib").alias("med_baricitinib_sum"),\
+    F.sum("med_molnupiravir").alias("med_molnupiravir_sum"))
 
     #Creating 1 variable for meds as indicator since some meds used infrequently
     drug_sums = drug_sums.withColumn('med_sum', sum(drug_sums[col] for col in ['med_remdesivir_sum', 'med_bebtelovimab_sum', 'med_baricitinib_sum', 'med_molnupiravir_sum', 'med_paxlovid_sum']))

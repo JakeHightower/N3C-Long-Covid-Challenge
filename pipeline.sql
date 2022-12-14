@@ -16,7 +16,7 @@ FROM DXCCSR_v2021_2
 
 @transform_pandas(
     Output(rid="ri.vector.main.execute.ba29d7b1-bb25-4c44-9338-5b585c649ae8"),
-    person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
+    person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 SELECT count(gender_concept_name), gender_concept_name
 FROM person

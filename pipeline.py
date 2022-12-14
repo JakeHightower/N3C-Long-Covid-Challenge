@@ -22,7 +22,7 @@ def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, 
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
     outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
-    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left')
+    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left').drop(columns=['time_to_pasc'])
 
     return icd_outcome
     #Adding time component (pre/post) to CCSR categories

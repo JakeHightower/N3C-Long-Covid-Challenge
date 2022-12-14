@@ -63,8 +63,9 @@ def condition_mapped(mapped_concepts, condition_era_train, condition_era):
 )
 from pyspark.sql import functions as F
 
+#Jenny - changed to 1000 temporarily - change after testing NN
 def conditions_only(pivot_by_person, cci_count):
-    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) #Removing conditions that occur less than 100 time in dataset
+    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<1000) #Removing conditions that occur less than 100 time in dataset
     sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti')
     conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
     #Rejoining with CCI counts

@@ -136,7 +136,7 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     ecmo_obs.groupBy("observation_concept_name").count().show(20, False)
     ecmo_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
  
-    final_ecmo = ecmo_proc.unionByName(ecmo_obs, allowMissingColumns=True)
+    final_ecmo = ecmo_proc.drop('data_partner_id', 'provider_id').unionByName(ecmo_obs.drop('data_partner_id', 'provider_id'), allowMissingColumns=True)
     final_ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
     final_ecmo = final_ecmo.dropDuplicates(['person_id'])
     

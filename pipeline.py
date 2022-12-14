@@ -31,6 +31,21 @@ def cci_count(icd_match, concept_set_members, person_all):
     
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.fb2bf844-e144-4ce9-b1dc-864ed7d22eaf"),
+    conditions_only=Input(rid="ri.foundry.main.dataset.cb07b6ff-9f7a-4fbe-9769-bdbbc922fc9d"),
+    covid_severity=Input(rid="ri.foundry.main.dataset.0791f5da-f1fb-47d0-bc39-b910d43e0b73"),
+    medications_vaccinations=Input(rid="ri.foundry.main.dataset.55dcfe75-eed3-4017-9d13-84e227bd509f"),
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
+)
+def cohort(conditions_only, person_all, medications_vaccinations, covid_severity):
+    columns_to_drop = ['location_id', 'person_data_partner_id', 'gender_concept_id', 'race_concept_id', 'ethnicity_concept_id', 'bmi', 'state', 'bmi_cat', 'race_concept_name', 'gender_concept_name', 'ethnicity_concept_name']
+    person = person_all.select('person_id', 'test_ind', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
+    
+    
+    merged = person.join(conditions_only, 'person_id', 'left').join(Add_drugs, 'person_id', 'left').join(Severity, 'person_id', 'left').drop(*columns_to_drop)
+    return merged.fillna(0, subset=(merged.columns[10:-1]))
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
     condition_era=Input(rid="ri.foundry.main.dataset.52d99538-b41d-4cb8-887a-9ac775c829f3"),
     condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
@@ -263,12 +278,17 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     drug_train_test = drug_train_test.withColumn('pre_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")< F.col("covid_index")), 1).otherwise(0))
     drug_train_test = drug_train_test.withColumn('post_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")>= F.col("covid_index")), 1).otherwise(0))
 
-    return drug_train_test.groupBy("person_id").agg(F.sum("med_paxlovid").alias("med_paxlovid_sum"),\
+    drug_sums = drug_train_test.groupBy("person_id").agg(F.sum("med_paxlovid").alias("med_paxlovid_sum"),\
     F.sum("pre_covid_vaccine").alias("pre_covid_vaccine_sum"),\
     F.sum("post_covid_vaccine").alias("post_covid_vaccine_sum"),\
     F.sum("med_remdesivir").alias("med_remdesivir_sum"),\
     F.sum("med_bebtelovimab").alias("med_bebtelovimab_sum"),\
     F.sum("med_baricitinib").alias("med_baricitinib_sum"))
+
+    #Creating 1 variable for meds as indicator since some meds used infrequently
+    drug_sums = drug_sums.withColumn('med_sum', sum(drug_sums[col] for col in ['med_remdesivir_sum', 'med_bebtelovimab_sum', 'med_baricitinib_sum', 'med_molnupiravir_sum', 'med_paxlovid_sum']))
+    drug_sums = drug_sums.withColumn('med_sum', F.when(F.col("med_sum")>0, 1).otherwise(0))
+    return drug_sums.drop('med_remdesivir_sum', 'med_bebtelovimab_sum', 'med_baricitinib_sum', 'med_molnupiravir_sum', 'med_paxlovid_sum')
 
     
 
@@ -353,11 +373,4 @@ def pivot_by_person(cci_count):
     cols = [F.sum(F.col(x)).alias(x) for x in df_sum.columns]
     agg_df = df_sum.agg(*cols).toPandas()
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
-
-@transform_pandas(
-    Output(rid="ri.vector.main.execute.231febd7-fa0e-47c6-a13e-acba75d8b659"),
-    conditions_only=Input(rid="ri.foundry.main.dataset.cb07b6ff-9f7a-4fbe-9769-bdbbc922fc9d")
-)
-def unnamed(conditions_only):
-    
 

@@ -82,7 +82,7 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     mm_train_test = mm_train_test.dropDuplicates(['visit_occurrence_id']) #DELETE FOR FINAL
 
     po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
-    po_train_test = mm_train_test.dropDuplicates(['procedure_occurrence_id']) #DELETE FOR FINAL
+    po_train_test = po_train_test.dropDuplicates(['procedure_occurrence_id']) #DELETE FOR FINAL
 
     condition_train_test = condition_occurrence_train.unionByName(condition_occurrence, allowMissingColumns=True)
     condition_train_test = condition_train_test.dropDuplicates(['condition_occurrence_id']) #DELETE FOR FINAL

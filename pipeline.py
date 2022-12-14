@@ -124,6 +124,7 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 from pyspark.sql import functions as F
+from pyspark.ml.feature import Imputer
 
 def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
@@ -139,6 +140,14 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
     
     #Cleaning demographics
+    person_outcome = person_outcome.withColumn("date_of_birth", F.to_date(F.expr("make_date(year_of_birth, month_of_birth, 1)"), "yyyy-MM-dd"))
+    person_outcome = person_outcome.withColumn("age_at_covid", F.when(F.col("is_age_90_or_older"), 90).otherwise(F.round(F.datediff(F.col("covid_index"), F.col("date_of_birth"))/365.25, 0)))
+
+    #Imputing missing values for age_at_covid - using median since only 2% are missing
+    imputer = Imputer(inputCols = ['age_at_covid'],
+    outputCols = ["{}_imputed".format(a) for a in ['age_at_covid']]).setStrategy("median")
+    person_outcome = imputer.fit(person_outcome).transform(person_outcome)
+
     #UDF to clean race variable
     def race_func(race_col):
         if race_col in ['Black or African American', 'Black']:
@@ -167,7 +176,11 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     person_outcome = person_outcome.withColumn('gender_cats', F.regexp_replace('gender_cats', ' ', '_'))
 
     return person_outcome
-    
+
+#Come back and figure out what columns to keep    
+    # keep_columns = ["person_id", "person_data_partner_id", "race_concept_name", "gender_concept_name", "ethnicity_concept_name", "covid_index", "date_of_birth", "age_at_covid_imputed", "pasc_code_after_four_weeks", "pasc_code_prior_four_weeks", "time_to_pasc", "state"]
+
+    # return df.select(*keep_columns)
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),

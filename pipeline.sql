@@ -18,6 +18,7 @@ FROM DXCCSR_v2021_2
     Output(rid="ri.vector.main.execute.ba29d7b1-bb25-4c44-9338-5b585c649ae8"),
     person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
 )
-SELECT *
+SELECT count(gender_concept_name), gender_concept_name
 FROM person
+group by gender_concept_name
 

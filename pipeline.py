@@ -2,28 +2,35 @@
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
+    Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
+    Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
     concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
     icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
 )
-#There is a general CCI codeset_id that matches to the measurement table. This indicates that the measurement is from CCI, not using for now (codeset_id=2351618)
 #CCI codeset from appendix here: https://static-content.springer.com/esm/art%3A10.1186%2Fs12879-022-07776-7/MediaObjects/12879_2022_7776_MOESM1_ESM.pdf
-#Findings from paper: moderate to severe liver disease, renal disease, metastatic solid tumor, and MI were the top four fatal comorbidities among patients who were hospitalized for COVID-19... Consistently, our study demonstrated that both men and women presented increased inflammation and coagulation, as suggested by the higher levels of CRP, ferritin, procalcitonin, NT proBNP and lymphopenia were at a higher risk of death.
 
 from pyspark.sql import functions as F
 
-def cci_join(icd_match, concept_set_members):
+def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     cci_cats = [535274723, 359043664, 78746470, 719585646, 403438288, 73549360, 494981955, 248333963, 378462283, 259495957, 489555336, 510748896, 514953976, 376881697, 220495690, 7650044049, 652711186] 
     cci = concept_set_members.filter(F.col("codeset_id").isin(cci_cats))
     cci_person = icd_match.join(cci, icd_match.condition_concept_id==cci.concept_id,'left')
 
     cci = cci_person.filter(cci_person.concept_set_name.isNotNull()).dropDuplicates(['person_id', 'concept_set_name']).groupBy('person_id').count().withColumnRenamed("count", "cci_count")    
     
-    #Adding time component (pre/post) to CCSR categories
-    icd_match = icd_match.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
-    icd_match = icd_match.withColumn("pre_post_condition", F.concat(icd_match.pre_post_covid, F.lit('_'), icd_match.default_ccsr_category_op_clean)) 
+    #Join test/train for outcomes
+    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
-    #Rejoining with CCSR count column with icd data
-    cci_ccsr = icd_match.join(cci, 'person_id', 'left').fillna(0, subset=['cci_count'])
+    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left')
+
+    return icd_outcome
+    #Adding time component (pre/post) to CCSR categories
+    # icd_match = icd_match.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
+    # icd_match = icd_match.withColumn("pre_post_condition", F.concat(icd_match.pre_post_covid, F.lit('_'), icd_match.default_ccsr_category_op_clean)) 
+
+    # #Rejoining with CCSR count column with icd data
+    # cci_ccsr = icd_match.join(cci, 'person_id', 'left').fillna(0, subset=['cci_count'])
 
     # cci_person.filter((cci_person.concept_set_name.isNotNull()) & (cci_person.person_id==5019396812315161384)).dropDuplicates(['concept_set_name']).show() # This person has 9 CCIs 
     #Removing spaces and dashes 
@@ -33,20 +40,33 @@ def cci_join(icd_match, concept_set_members):
     # #Date difference between condition and covid - same as N3C comborbidities paper
     # cci_person = cci_person.withColumn("condition_to_covid", F.datediff(F.col("condition_era_start_date"), F.col("covid_index")))
 
-    return cci_ccsr
+    # return cci_ccsr
 
     
 
     
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
+    condition_era=Input(rid="ri.foundry.main.dataset.52d99538-b41d-4cb8-887a-9ac775c829f3"),
+    condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
+    mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c")
+)
+def condition_mapped(mapped_concepts, condition_era_train, condition_era):
+    #Join test/train for condition_eras
+    condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
+    condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
+    return condition_train_test.join(mapped_concepts, condition_train_test.condition_concept_id==mapped_concepts.concept_id_2,'left')
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.cb07b6ff-9f7a-4fbe-9769-bdbbc922fc9d"),
-    cci_join=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
+    cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
     pivot_by_person=Input(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020")
 )
 from pyspark.sql import functions as F
 
-def conditions_only(pivot_by_person, cci_join):
+def conditions_only(pivot_by_person, cci_count):
+    cci_join = cci_count
     sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100)
     sub100_removed = cci_join.join(sub100, cci_join.pre_post_condition==sub100.condition, 'left_anti')
     conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
@@ -56,21 +76,20 @@ def conditions_only(pivot_by_person, cci_join):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
-    person_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
+    condition_mapped=Input(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646")
 )
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-def icd_match(person_mapped):
-    keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "Default_CCSR_CATEGORY_DESCRIPTION_OP", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name", "covid_index", "pasc_code_after_four_weeks", "pasc_code_prior_four_weeks", "time_to_pasc"]
-
+def icd_match(condition_mapped):
     #Recoding all pregnancy categories into 1 group since they are highly correlated and adding some manual mappings for concepts that did not map directly to ICD10 codes
+    condition_mapped = condition_mapped.withColumn('default_ccsr_category_op_clean', F.when(F.col("default_ccsr_category_op_clean").startswith('PRG'), 'PRG').when(F.col("condition_concept_id")==4113821, 'MBD005').when(F.col("condition_concept_id")==4195384, 'SYM013').otherwise(F.col("default_ccsr_category_op_clean")))
 
-    person_mapped = person_mapped.withColumn('default_ccsr_category_op_clean', F.when(F.col("default_ccsr_category_op_clean").startswith('PRG'), 'PRG').when(F.col("condition_concept_id")==4113821, 'MBD005').when(F.col("condition_concept_id")==4195384, 'SYM013').otherwise(F.col("default_ccsr_category_op_clean")))
+    keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name", "covid_index", "pasc_code_after_four_weeks", "pasc_code_prior_four_weeks"]
 
-    df = person_mapped.filter((person_mapped.default_ccsr_category_op_clean.isNotNull()) & (person_mapped.default_ccsr_category_op_clean!='XXX111')).dropDuplicates(["condition_era_id", "default_ccsr_category_op_clean"]).select(*keep_vars)
+    df = condition_mapped.filter((condition_mapped.default_ccsr_category_op_clean.isNotNull()) & (condition_mapped.default_ccsr_category_op_clean!='XXX111')).dropDuplicates(["condition_era_id", "default_ccsr_category_op_clean"]).select(*keep_vars)
 
-    #There are still some duplicates because concept_ids matched with multiple ICDs 
+    #There are some duplicates because concept_ids matched with multiple ICDs 
     #Take the icd10cm_clean thats shorter since that's likely the broader category. Create column to count the length of ICD code
     df = df.withColumn('icd_length', F.length("icd10cm_clean"))
     
@@ -112,14 +131,12 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
     Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
-    condition_era=Input(rid="ri.foundry.main.dataset.52d99538-b41d-4cb8-887a-9ac775c829f3"),
-    condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
     person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4"),
     person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316")
 )
 from pyspark.sql import functions as F
 
-def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Standard_train, condition_era, Long_COVID_Silver_Standard_Blinded):
+def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
     person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
     person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
@@ -129,10 +146,6 @@ def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Stan
     #Join test/train for outcomes
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
     outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
-
-    #Join test/train for condition_eras
-    condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
-    condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
     
     person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
     return person_outcome
@@ -142,32 +155,20 @@ def person_all(person_train, person, condition_era_train, Long_COVID_Silver_Stan
     # # df = condition_outcome.drop('data_partner_id').join(person_train_test, 'person_id', 'inner')
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9"),
-    Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
-    condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
-    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
+    Output(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9")
 )
 from pyspark.sql import functions as F
 
 #38,044 people have conditions in the condition_era table
-def person_condition(person_all, condition_era_train, Long_COVID_Silver_Standard_train):
+def person_condition():
     Long_COVID_Silver_Standard = Long_COVID_Silver_Standard_train
     condition_era = condition_era_train
     condition_outcome = condition_era.join(Long_COVID_Silver_Standard, 'person_id','inner')
     return condition_outcome.drop('data_partner_id').join(person_all, 'person_id', 'inner')
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
-    mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c"),
-    person_condition=Input(rid="ri.foundry.main.dataset.e7470afc-e73f-44ae-a021-2b09d349f8a9")
-)
-def person_mapped(person_condition, mapped_concepts):
-    # ltd_df = person_condition.limit(200)
-    return person_condition.join(mapped_concepts, person_condition.condition_concept_id==mapped_concepts.concept_id_2,'left')
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),
-    cci_join=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b")
+    cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b")
 )
 #pivot data example pulled from: /UNITE/N3C Training Area/Practice Area - Public and Example Data/Machine learning examples/synthea_RF/conditions_and_demographics_synthea_dialysis_RF/RandomForest_Dialysis_Synthea
 
@@ -175,7 +176,8 @@ from pyspark.sql import functions as F
 import pandas as pd
 
 #Pivoting and then counting the occurrence of each pre/post condition 
-def pivot_by_person(cci_join):
+def pivot_by_person(cci_count):
+    cci_join = cci_count
     df = cci_join.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
 
     df_sum = df.select(df.columns[1:]) #Grabbing condition columns

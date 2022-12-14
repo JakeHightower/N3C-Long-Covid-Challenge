@@ -2,16 +2,15 @@
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
-    Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
-    Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
     concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
-    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6")
+    icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
 #CCI codeset from appendix here: https://static-content.springer.com/esm/art%3A10.1186%2Fs12879-022-07776-7/MediaObjects/12879_2022_7776_MOESM1_ESM.pdf
 
 from pyspark.sql import functions as F
 
-def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
+def cci_count(icd_match, concept_set_members, person_all):
     cci_cats = [535274723, 359043664, 78746470, 719585646, 403438288, 73549360, 494981955, 248333963, 378462283, 259495957, 489555336, 510748896, 514953976, 376881697, 220495690, 7650044049, 652711186] 
     cci = concept_set_members.filter(F.col("codeset_id").isin(cci_cats))
     cci_person = icd_match.join(cci, icd_match.condition_concept_id==cci.concept_id,'left')
@@ -19,10 +18,10 @@ def cci_count(icd_match, concept_set_members, Long_COVID_Silver_Standard_train, 
     cci = cci_person.filter(cci_person.concept_set_name.isNotNull()).dropDuplicates(['person_id', 'concept_set_name']).groupBy('person_id').count().withColumnRenamed("count", "cci_count")    
     
     #Join test/train for outcomes
-    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
-    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
+    # outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    # outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
 
-    icd_outcome = icd_match.join(outcome_train_test, 'person_id', 'left').drop('time_to_pasc')
+    icd_outcome = icd_match.join(person_all.keep('person_id', 'covid_index'), 'person_id', 'left')
 
     #Adding time component (pre/post) to CCSR categories
     icd_outcome = icd_outcome.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
@@ -117,6 +116,67 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     # return concept_icd10.groupBy('valid_end_date').count()
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.55dcfe75-eed3-4017-9d13-84e227bd509f"),
+    concept_set_members=Input(rid="ri.foundry.main.dataset.e670c5ad-42ca-46a2-ae55-e917e3e161b6"),
+    drug_era=Input(rid="ri.foundry.main.dataset.5d7b2d96-8549-4207-823f-f4e95be34ed3"),
+    drug_era_train=Input(rid="ri.foundry.main.dataset.9f7a8197-ea20-48ef-8350-2dfb4f964750"),
+    person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
+)
+from pyspark.sql import functions as F
+
+#Contains code for Paxlovid, Remdesivir, other medications and vaccination
+def medications_vaccinations(drug_era_train, drug_era, concept_set_members, person_all):
+    drug_train_test = drug_era_train.unionByName(drug_era, allowMissingColumns=True)
+    drug_train_test = drug_train_test.dropDuplicates(['drug_era_id']) #DELETE FOR FINAL
+
+    #Creates indicator medication variable and computes frequency and number of distinct people
+    def create_med_var(codeset_num, codeset_str, df):
+        codeset = concept_set_members.filter(F.col("codeset_id")==codeset_num) 
+        concepts=codeset.rdd.map(lambda x: x.concept_id).collect() #Converting column to list  
+        df = df.withColumn(codeset_str, F.when((F.col("drug_concept_id").isin(concepts)), 1).otherwise(0))
+        df.groupBy(codeset_str).count().show() #Total count
+        df.filter(df[codeset_str]==1).select(F.countDistinct("person_id")).show() #Distinct number of people
+        return df
+
+    #Paxlovid - 280 drug_eras for paxlovid and 277 unique users. Also looked at codeset_ids: 798981734, 854747727 but all produced the same numbers
+    drug_train_test = create_med_var(339287218, 'med_paxlovid', drug_train_test) 
+    
+    #Remdesivir - 4785 drug_eras and 3236 unique users
+    drug_train_test = create_med_var(96369749, 'med_remdesivir', drug_train_test)
+    
+    #Bebtelovimab (monoclonal antibodies) - this is probably not the most comprehensive codeset but using what exists already. 231 drug_eras and 154 unique users
+    drug_train_test = create_med_var(487953007, 'med_bebtelovimab', drug_train_test)
+
+    #Baricitinib - 911 drug_eras and 594 unique users. Also looked at codeset_id: 394764748 but it produced the same numbers
+    drug_train_test = create_med_var(38048732, 'med_baricitinib', drug_train_test) 
+    
+    #Molnupiravir - 0 drug_eras and 0 unique users - not using since none found in dataset
+    # drug_train_test = create_med_var(643666235, 'med_molnupiravir', drug_train_test) 
+    
+    #Covid Vaccinations - 11,466 drug_eras for 7741 unique_users. Also looked at codeset_id: 600531961 but it produced slightly fewer vaccinations. This definition is broader and includes the following drugs and their drug_concept_ids. I researched all of these drugs in Athena and they are valid.
+    # SARS-CoV-2 (COVID-19) vaccine, mRNA-BNT162b2 0.1 MG/ML Injectable Suspension [Comirnaty] (1759206)
+    # SARS-CoV-2 (COVID-19) vaccine, mRNA-1273 0.1 MG/ML Injectable Suspension (779414)
+    # SARS-CoV-2 (COVID-19) vaccine, mRNA-BNT162b2 0.05 MG/ML Injectable Suspension (702118)
+    # SARS-CoV-2 (COVID-19) vaccine, mRNA-1273 0.2 MG/ML Injectable Suspension [Spikevax] (779679)
+
+    drug_train_test = create_med_var(697105949, 'covid_vaccine', drug_train_test) 
+    
+    #Making pre/post groups for Covid vaccine
+    drug_train_test = drug_train_test.join(person_all.keep('person_id', 'covid_index'), 'person_id', 'left')
+
+    drug_train_test = drug_train_test.withColumn('pre_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")< F.col("covid_index")), 1).otherwise(0))
+    drug_train_test = drug_train_test.withColumn('post_covid_vaccine', F.when((F.col("covid_vaccine")==1) & (F.col("drug_era_start_date")>= F.col("covid_index")), 1).otherwise(0))
+
+    return drug_train_test.groupBy("person_id").agg(F.sum("med_paxlovid").alias("med_paxlovid_sum"),\
+    F.sum("pre_covid_vaccine").alias("pre_covid_vaccine_sum"),\
+    F.sum("post_covid_vaccine").alias("post_covid_vaccine_sum"),\
+    F.sum("med_remdesivir").alias("med_remdesivir_sum"),\
+    F.sum("med_bebtelovimab").alias("med_bebtelovimab_sum"),\
+    F.sum("med_baricitinib").alias("med_baricitinib_sum"), \
+    F.sum("med_molnupiravir").alias("med_molnupiravir_sum"))
+    
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
     Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
@@ -197,11 +257,4 @@ def pivot_by_person(cci_count):
     cols = [F.sum(F.col(x)).alias(x) for x in df_sum.columns]
     agg_df = df_sum.agg(*cols).toPandas()
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
-
-@transform_pandas(
-    Output(rid="ri.vector.main.execute.4e68e69d-98f8-4161-ba48-d59269500607"),
-    drug_era_train=Input(rid="ri.foundry.main.dataset.9f7a8197-ea20-48ef-8350-2dfb4f964750")
-)
-def unnamed(drug_era_train):
-    
 

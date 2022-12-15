@@ -63,9 +63,8 @@ def condition_mapped(mapped_concepts, condition_era_train, condition_era):
 )
 from pyspark.sql import functions as F
 
-#Jenny - changed to 1000 temporarily - change after testing NN
 def conditions_only(pivot_by_person, cci_count):
-    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<1000) #Removing conditions that occur less than 100 time in dataset
+    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) #Removing conditions that occur less than 100 times in dataset
     sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti')
     conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
     #Rejoining with CCI counts
@@ -306,7 +305,6 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     #Join test/train for persons
     person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
     person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
-    
     person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
 
     #Join test/train for outcomes
@@ -352,11 +350,6 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     person_outcome = person_outcome.withColumn('gender_cats', F.regexp_replace('gender_cats', ' ', '_'))
 
     return person_outcome
-
-#Come back and figure out what columns to keep    
-    # keep_columns = ["person_id", "person_data_partner_id", "race_concept_name", "gender_concept_name", "ethnicity_concept_name", "covid_index", "date_of_birth", "age_at_covid_imputed", "pasc_code_after_four_weeks", "pasc_code_prior_four_weeks", "time_to_pasc", "state"]
-
-    # return df.select(*keep_columns)
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020"),

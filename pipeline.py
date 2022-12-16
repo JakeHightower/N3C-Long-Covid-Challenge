@@ -182,14 +182,14 @@ def icd_match(condition_mapped):
     condition_mapped = condition_mapped.withColumn('default_ccsr_category_op_clean', F.when(F.col("default_ccsr_category_op_clean").startswith('PRG'), 'PRG').when(F.col("condition_concept_id")==4113821, 'MBD005').when(F.col("condition_concept_id")==4195384, 'SYM013').otherwise(F.col("default_ccsr_category_op_clean")))
 
     keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name"]
-    #Removing 
+    #Removing XXX111 (Unacceptable DX1) category, nulls and duplicates for CCSR
     df = condition_mapped.filter((condition_mapped.default_ccsr_category_op_clean.isNotNull()) & (condition_mapped.default_ccsr_category_op_clean!='XXX111')).dropDuplicates(["condition_era_id", "default_ccsr_category_op_clean"]).select(*keep_vars)
 
-    #There are some duplicates because concept_ids matched with multiple ICDs 
-    #Take the icd10cm_clean thats shorter since that's likely the broader category. Create column to count the length of ICD code
+    #Some duplicates still exist because concept_ids matched with multiple ICDs that were in different CCSR groupings 
+    #Take the broader icd10cm_clean (codes of shorter length are more general). Create column to count the length of ICD code
     df = df.withColumn('icd_length', F.length("icd10cm_clean"))
     
-    #Sort by length of icd code and then choose the row with shortest icd code length (first row). If multiple rows in a condition era are the same length, this takes whichever is first
+    #Sort by length of icd code and choose the row with shortest icd code length (first row). If multiple rows in a condition era are the same length, take the first.
     w2 = Window.partitionBy("condition_era_id").orderBy(F.col("icd_length"))
     return df.withColumn("row",F.row_number().over(w2)) \
     .filter(F.col("row") == 1).drop("row")

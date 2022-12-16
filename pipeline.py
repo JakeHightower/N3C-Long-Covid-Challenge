@@ -50,7 +50,6 @@ def cohort(conditions_only, person_all, medications_vaccinations, covid_severity
     mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c")
 )
 def condition_mapped(mapped_concepts, condition_era_train, condition_era):
-    #Join test/train for condition_eras
     #38,044 people have conditions in the condition_era_train table
     condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
     condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
@@ -430,9 +429,59 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.ded6ca3b-a7b2-4e4a-8f95-aee88ebab5e5"),
+    Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
-def unnamed(model_prep):
+from xgboost import XGBClassifier, cv, plot_importance
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import numpy as np 
+import pandas as pd
+
+def xgboost_model(model_prep):
+    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = model_prep['pasc_code_after_four_weeks']
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+
+    #Using parameters resulting from hyperparameter tuning
+    params = {'colsample_bytree': 0.959673890513813, 'gamma': 1.290289527241848, 'max_depth': 9, 'min_child_weight': 1, 'reg_alpha': 65, 'reg_lambda': 0.8313205212866197, 'scale_pos_weight': 3, 'use_label_encoder':False}
+
+    #Fit model
+    #Class Weighted XGBoost
+    model = XGBClassifier(**params) 
+    model.fit(x_train, y_train) 
+
+    #Predictions on test set
+    y_pred = model.predict(x_test)
+    predictions = [round(value) for value in y_pred]
+
+    #Running evaluation metrics
+    accuracy = accuracy_score(y_test, predictions)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
+    f1 = f1_score(y_test, predictions)
+    print("f1: %.2f%%" % (f1 * 100.0))
+    precision = precision_score(y_test, predictions)
+    print("Precision: %.2f%%" % (precision * 100.0))
+    recall = recall_score(y_test, predictions)
+    print("Recall: %.2f%%" % (recall * 100.0))
+    roc_auc = roc_auc_score(y_test, predictions)
+    print("roc_auc: %.2f%%" % (roc_auc * 100.0))
+    cm = confusion_matrix(y_test, predictions)
+    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+
+# Plot feature importance - top 10
+    plot_importance(model, max_num_features=10)
+    plt.tight_layout()
+    plt.show()
+
+    #Return the person_id for test set
+    test_indices = x_test.index.tolist()
+    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
+
+    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value
+    output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
+    return output_with_preds
+
     
 

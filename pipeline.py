@@ -490,7 +490,7 @@ def xgb_hyperparam_tuning(model_prep):
         cm = confusion_matrix(y_test, predictions)
         print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
 
-        return {'loss': 1-roc_auc, 'status': STATUS_OK } #Not totally sure about this loss
+        return {'loss': 1-roc_auc, 'status': STATUS_OK } 
 
     trials = Trials()
 
@@ -505,13 +505,13 @@ def xgb_hyperparam_tuning(model_prep):
  
     best_dict = {key: [val] for key, val in best_hyperparams.items()}
 
-    return pd.DataFrame.from_dict(best_dict, orient='index')
+    return pd.DataFrame.from_dict(best_dict)
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
-#Running class-weighted XGBoost classifier on cohort. 
+#Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
 
 from xgboost import XGBClassifier, plot_importance
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
@@ -521,13 +521,15 @@ import numpy as np
 import pandas as pd
 
 def xgboost_model(model_prep):
+
     X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     Y = model_prep['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
-    #Using parameters resulting from hyperparameter tuning
-    params = {'colsample_bytree': 0.959673890513813, 'gamma': 1.290289527241848, 'max_depth': 9, 'min_child_weight': 1, 'reg_alpha': 65, 'reg_lambda': 0.8313205212866197, 'scale_pos_weight': 3, 'use_label_encoder':False}
-
+    #Using best parameters from hyperparameter tuning
+    params = test_df.to_dict()[0]
+    params['use_label_encoder'] = False
+    
     #Fit model
     #Class Weighted XGBoost
     model = XGBClassifier(**params) 

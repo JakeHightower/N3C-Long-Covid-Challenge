@@ -49,10 +49,10 @@ def cohort(conditions_only, person_all, medications_vaccinations, covid_severity
     condition_era_train=Input(rid="ri.foundry.main.dataset.e9ff83ed-a71c-4abe-a0e2-c204e624cd8c"),
     mapped_concepts=Input(rid="ri.foundry.main.dataset.313bf22e-6ba2-46a6-be7b-742db516104c")
 )
+#Joining conditions to mapped concepts. This is a many to many match, icd_match code cleans it to make 1:1 mappings. 
 def condition_mapped(mapped_concepts, condition_era_train, condition_era):
-    #38,044 people have conditions in the condition_era_train table
-    condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True)
-    condition_train_test = condition_train_test.dropDuplicates(['condition_era_id']) #DELETE FOR FINAL
+    #38,044 patients have conditions in the condition_era_train table
+    condition_train_test = condition_era_train.unionByName(condition_era, allowMissingColumns=True).dropDuplicates(['condition_era_id'])
     return condition_train_test.join(mapped_concepts, condition_train_test.condition_concept_id==mapped_concepts.concept_id_2,'left')
 
 @transform_pandas(
@@ -178,11 +178,11 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 def icd_match(condition_mapped):
-    #Recoding all pregnancy categories into 1 group since they are highly correlated and adding some manual mappings for concepts that did not map directly to ICD10 codes
+    #Recoding all pregnancy categories into 1 group since they are highly correlated. Adding some manual mappings for concepts that did not map directly to ICD10 codes.
     condition_mapped = condition_mapped.withColumn('default_ccsr_category_op_clean', F.when(F.col("default_ccsr_category_op_clean").startswith('PRG'), 'PRG').when(F.col("condition_concept_id")==4113821, 'MBD005').when(F.col("condition_concept_id")==4195384, 'SYM013').otherwise(F.col("default_ccsr_category_op_clean")))
 
     keep_vars = ["person_id", "condition_era_id", "condition_era_start_date", "icd10cm_clean", "default_ccsr_category_op_clean", "condition_concept_id", "condition_concept_name"]
-
+    #Removing 
     df = condition_mapped.filter((condition_mapped.default_ccsr_category_op_clean.isNotNull()) & (condition_mapped.default_ccsr_category_op_clean!='XXX111')).dropDuplicates(["condition_era_id", "default_ccsr_category_op_clean"]).select(*keep_vars)
 
     #There are some duplicates because concept_ids matched with multiple ICDs 
@@ -203,8 +203,10 @@ def icd_match(condition_mapped):
 from pyspark.sql import functions as F
 
 def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
+    #Grabbing all maps_to relationships between concepts where the map doesn't map to itself 
     maps_to = concept_relationship.filter((concept_relationship.relationship_id=="Maps to") & (concept_relationship.concept_id_1!=concept_relationship.concept_id_2))
     
+    #ICD10s for all conditions
     concept_icd10 = concept.filter((concept.domain_id=="Condition") & (concept.vocabulary_id=="ICD10CM") & (concept.invalid_reason.isNull()))
     concept_icd10 = concept_icd10.withColumn("concept_code_clean", F.regexp_replace("concept_code", "\.", ''))   
     
@@ -214,14 +216,12 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     #Joining concept_relationship and concept tables. This table has 120,696 rows.
     concept_map = maps_to.join(concept_icd10,concept_icd10.concept_id == maps_to.concept_id_1,'inner').select('concept_icd10.concept_id', 'concept_icd10.concept_name', 'concept_icd10.concept_code_clean', 'maps_to.concept_id_1', 'maps_to.concept_id_2')
     
-    #OG DXCCSR_v2021_2 data table has 73,211 rows
+    #Pulling in CCSR groupings, DXCCSR_v2021_2 data table has 73,211 rows
     ccsr = DXCCSR_v2021_2.withColumn("icd10cm_clean", F.regexp_replace("`ICD-10-CM_CODE`", "'", ''))
     ccsr = ccsr.withColumn("default_ccsr_category_op_clean", F.regexp_replace("Default_CCSR_CATEGORY_OP", "'", ''))
     
     #Final table has 125,203 rows. 26,723 rows (containing 20,724 unique icd10 codes) are in the concept table but not in the ccsr table
     return concept_map.join(ccsr, concept_map.concept_code_clean==ccsr.icd10cm_clean,'outer')
-
-    # return concept_icd10.groupBy('valid_end_date').count()
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.55dcfe75-eed3-4017-9d13-84e227bd509f"),
@@ -365,16 +365,18 @@ from pyspark.ml.feature import Imputer
 def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
     person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
-    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')
+    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')#.dropDuplicates(['person_id']) #UNCOMMENT FOR FINAL
     person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
 
     #Join test/train for outcomes
-    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)
+    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)#.dropDuplicates(['person_id']) #UNCOMMENT FOR FINAL
     outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
     
+    #Joining person and outcome data
     person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
     
     #Cleaning demographics
+    #Calculating age at covid dx, if they're 90 or older, set age at 90. If birthday data is missing, impute median.
     person_outcome = person_outcome.withColumn("date_of_birth", F.to_date(F.expr("make_date(year_of_birth, month_of_birth, 1)"), "yyyy-MM-dd"))
     person_outcome = person_outcome.withColumn("age_at_covid", F.when(F.col("is_age_90_or_older"), 90).otherwise(F.round(F.datediff(F.col("covid_index"), F.col("date_of_birth"))/365.25, 0)))
 
@@ -398,7 +400,7 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
 
     func_udf = F.udf(race_func)
     person_outcome = person_outcome.withColumn('race_cats',func_udf(person_outcome['race_concept_name']))
-    #Removing spaces for when making dummy variables
+    #Removing spaces for dummy variable conversion
     person_outcome = person_outcome.withColumn('race_cats', F.regexp_replace('race_cats', ' ', '_'))
     person_outcome.groupBy('race_cats').count().show(20, False) #Total count
 
@@ -407,6 +409,7 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     person_outcome = person_outcome.withColumn('ethnicity_cats', F.regexp_replace('ethnicity_cats', ' ', '_'))
 
     #Cleaning gender
+    #If a persons gender is unknown or has no matching concept, making them male (48 patients, 0.08%)
     person_outcome=person_outcome.withColumn("gender_cats", F.when(F.col("gender_concept_name").isin(['UNKNOWN', 'No matching concept']), 'MALE').otherwise(F.col("gender_concept_name"))) 
     person_outcome = person_outcome.withColumn('gender_cats', F.regexp_replace('gender_cats', ' ', '_'))
 

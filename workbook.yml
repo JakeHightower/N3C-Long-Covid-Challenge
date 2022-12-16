@@ -2,7 +2,9 @@
 rid: "ri.vector.main.workbook.3d3f4d09-72e9-4583-b96a-6c4677dc8cce"
 repositoryRid: "ri.stemma.main.repository.792aba7b-1919-4e2b-b206-da0fcfc10540"
 environmentRepositoryRid: null
-backingRepositoryRids: []
+backingRepositoryRids:
+- "ri.vector.runtime.artifacts.repository"
+- "ri.artifacts.repository.artifactory.internal-docker-release"
 outputFolderRid: "ri.compass.main.folder.e6ec93ab-520c-49e4-9cd1-0bbc4fe9160d"
 comparisonParentFolderRid: "ri.compass.main.folder.472bb05c-11f9-452e-b255-a1156767145e"
 legacyVectorLanguage: null

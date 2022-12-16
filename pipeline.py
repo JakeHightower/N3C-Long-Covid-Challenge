@@ -438,11 +438,74 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.cb730975-2751-412d-b2c4-d222aa9388fb"),
+    Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
-def unnamed(model_prep):
+import pandas as pd
+from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
+from sklearn.model_selection import train_test_split
+
+def xgb_hyperparam_tuning(model_prep):
     
+    X = remove_vars.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = remove_vars['pasc_code_after_four_weeks']
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+
+    space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
+        'gamma': hp.uniform ('gamma', 1,9),
+        'reg_alpha' : hp.quniform('reg_alpha', 40,180,1),
+        'reg_lambda' : hp.uniform('reg_lambda', 0,1),
+        'colsample_bytree' : hp.uniform('colsample_bytree', 0.5,1),
+        'min_child_weight' : hp.quniform('min_child_weight', 0, 10, 1),
+        'scale_pos_weight' : hp.choice('scale_pos_weight', [4, 5, 6, 7, 8]),
+        'n_estimators': 180,
+        'seed': 0
+    }
+
+    def objective(space):
+        clf=XGBClassifier(n_estimators =space['n_estimators'], max_depth = int(space['max_depth']), gamma = space['gamma'],
+                        reg_alpha = int(space['reg_alpha']),min_child_weight=int(space['min_child_weight']),
+                        colsample_bytree=int(space['colsample_bytree']), scale_pos_weight=space['scale_pos_weight'], use_label_encoder=False)
+        
+        evaluation = [(x_train, y_train), (x_test, y_test)]
+
+        clf.fit(x_train, y_train,
+                eval_set=evaluation, eval_metric="auc",
+                early_stopping_rounds=10,verbose=False)
+
+        predictions = clf.predict(x_test)
+
+        accuracy = accuracy_score(y_test, predictions)
+        print("Accuracy: %.2f%%" % (accuracy * 100.0))
+        f1 = f1_score(y_test, predictions)
+        print("f1: %.2f%%" % (f1 * 100.0))
+        precision = precision_score(y_test, predictions)
+        print("Precision: %.2f%%" % (precision * 100.0))
+        recall = recall_score(y_test, predictions)
+        print("Recall: %.2f%%" % (recall * 100.0))
+        roc_auc = roc_auc_score(y_test, predictions)
+        print("roc_auc: %.2f%%" % (roc_auc * 100.0))
+        cm = confusion_matrix(y_test, predictions)
+        print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+
+        return {'loss': 1-roc_auc, 'status': STATUS_OK } #Not totally sure about this loss
+
+    trials = Trials()
+
+    best_hyperparams = fmin(fn = objective,
+                            space = space,
+                            algo = tpe.suggest,
+                            max_evals = 100,
+                            trials = trials)
+
+    print("The best hyperparameters are : ","\n")
+    print(best_hyperparams)
+ 
+    best_dict = {key: [val] for key, val in best_hyperparams.items()}
+
+    return pd.DataFrame.from_dict(best_dict, orient='index')
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),

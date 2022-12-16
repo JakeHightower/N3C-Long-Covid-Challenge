@@ -449,8 +449,8 @@ from sklearn.model_selection import train_test_split
 
 def xgb_hyperparam_tuning(model_prep):
     
-    X = remove_vars.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = remove_vars['pasc_code_after_four_weeks']
+    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = model_prep['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     space={'max_depth': hp.quniform("max_depth", 3, 18, 1),

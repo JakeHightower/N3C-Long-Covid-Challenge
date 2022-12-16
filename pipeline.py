@@ -6,24 +6,28 @@
     icd_match=Input(rid="ri.foundry.main.dataset.8ad54572-0a0e-48bc-b56f-2d3c006b57b6"),
     person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
+#Calculating the sum of Charleson Comorbidity Index components for each patient
 #CCI codeset from appendix here: https://static-content.springer.com/esm/art%3A10.1186%2Fs12879-022-07776-7/MediaObjects/12879_2022_7776_MOESM1_ESM.pdf
 
 from pyspark.sql import functions as F
 
 def cci_count(icd_match, concept_set_members, person_all):
+    #Using pre-existing CCI concept sets
     cci_cats = [535274723, 359043664, 78746470, 719585646, 403438288, 73549360, 494981955, 248333963, 378462283, 259495957, 489555336, 510748896, 514953976, 376881697, 220495690, 7650044049, 652711186] 
     cci = concept_set_members.filter(F.col("codeset_id").isin(cci_cats))
-    cci_person = icd_match.join(cci, icd_match.condition_concept_id==cci.concept_id,'left')
-
+    cci_person = icd_match.join(cci, icd_match.condition_concept_id==cci.concept_id,'left') #Matching conditions to CCI concepts
+    
+    #Counting number of CCI components for each person
     cci = cci_person.filter(cci_person.concept_set_name.isNotNull()).dropDuplicates(['person_id', 'concept_set_name']).groupBy('person_id').count().withColumnRenamed("count", "cci_count")    
     
+    #Grabbing Covid index date to create pre/post variables
     icd_outcome = icd_match.join(person_all.select('person_id', 'covid_index'), 'person_id', 'left')
 
     #Adding time component (pre/post) to CCSR categories
     icd_outcome = icd_outcome.withColumn("pre_post_covid", F.when((F.col("condition_era_start_date") < F.col("covid_index")), "pre").otherwise("post")) 
     icd_outcome = icd_outcome.withColumn("pre_post_condition", F.concat(icd_outcome.pre_post_covid, F.lit('_'), icd_outcome.default_ccsr_category_op_clean)) 
 
-    #Rejoining with cci count column with ccsr data
+    #Joining CCI count column with CCSR data
     return icd_outcome.join(cci, 'person_id', 'left').fillna(0, subset=['cci_count'])
 
     
@@ -37,11 +41,12 @@ def cci_count(icd_match, concept_set_members, person_all):
     medications_vaccinations=Input(rid="ri.foundry.main.dataset.55dcfe75-eed3-4017-9d13-84e227bd509f"),
     person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
+#Merging all datasets into cohort
 def cohort(conditions_only, person_all, medications_vaccinations, covid_severity):
     columns_to_drop = ['location_id', 'person_data_partner_id', 'gender_concept_id', 'race_concept_id', 'ethnicity_concept_id', 'bmi', 'state', 'bmi_cat', 'race_concept_name', 'gender_concept_name', 'ethnicity_concept_name']
     person = person_all.select('person_id', 'test_ind', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
     merged = person.join(conditions_only, 'person_id', 'left').join(medications_vaccinations, 'person_id', 'left').join(covid_severity, 'person_id', 'left')
-    return merged.fillna(0, subset=(merged.columns[8:-1]))
+    return merged.fillna(0, subset=(merged.columns[8:-1])) #Filling NAs for the condition columns 
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.a1fd31d0-a0ba-4cd0-b3e4-20033a743646"),
@@ -60,11 +65,12 @@ def condition_mapped(mapped_concepts, condition_era_train, condition_era):
     cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
     pivot_by_person=Input(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020")
 )
+#Removing conditions that occur fewer than 100 times in dataset
 from pyspark.sql import functions as F
 
 def conditions_only(pivot_by_person, cci_count):
-    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) #Removing conditions that occur less than 100 times in dataset
-    sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti')
+    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) 
+    sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti') #Keeping rows with conditions occurring 100+ times
     conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
     #Rejoining with CCI counts
     return conds.join(cci_count.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
@@ -230,14 +236,13 @@ def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
     drug_era_train=Input(rid="ri.foundry.main.dataset.9f7a8197-ea20-48ef-8350-2dfb4f964750"),
     person_all=Input(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d")
 )
+#Defining Covid vaccinations and medication use
 from pyspark.sql import functions as F
 
-#Contains code for Paxlovid, Remdesivir, other medications and vaccination
 def medications_vaccinations(drug_era_train, drug_era, concept_set_members, person_all):
-    drug_train_test = drug_era_train.unionByName(drug_era, allowMissingColumns=True)
-    drug_train_test = drug_train_test.dropDuplicates(['drug_era_id']) #DELETE FOR FINAL
-
-    #Creates indicator medication variable and computes frequency and number of distinct people
+    drug_train_test = drug_era_train.unionByName(drug_era, allowMissingColumns=True).dropDuplicates(['drug_era_id'])
+    
+    #Creates indicator medication variable and prints frequency and number of distinct people using each drug
     def create_med_var(codeset_num, codeset_str, df):
         codeset = concept_set_members.filter(F.col("codeset_id")==codeset_num) 
         concepts=codeset.rdd.map(lambda x: x.concept_id).collect() #Converting column to list  
@@ -246,22 +251,22 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
         df.filter(df[codeset_str]==1).select(F.countDistinct("person_id")).show() #Distinct number of people
         return df
 
-    #Paxlovid - 280 drug_eras for paxlovid and 277 unique users. Also looked at codeset_ids: 798981734, 854747727 but all produced the same numbers
+    #Paxlovid - 280 drug_eras for paxlovid and 277 unique users. Also looked at codeset_ids: 798981734, 854747727, all produced the same numbers.
     drug_train_test = create_med_var(339287218, 'med_paxlovid', drug_train_test) 
     
     #Remdesivir - 4785 drug_eras and 3236 unique users
     drug_train_test = create_med_var(96369749, 'med_remdesivir', drug_train_test)
     
-    #Bebtelovimab (monoclonal antibodies) - this is probably not the most comprehensive codeset but using what exists already. 231 drug_eras and 154 unique users
+    #Bebtelovimab (monoclonal antibodies). 231 drug_eras and 154 unique users
     drug_train_test = create_med_var(487953007, 'med_bebtelovimab', drug_train_test)
 
-    #Baricitinib - 911 drug_eras and 594 unique users. Also looked at codeset_id: 394764748 but it produced the same numbers
+    #Baricitinib - 911 drug_eras and 594 unique users. Also looked at codeset_id: 394764748 and it produced the same numbers
     drug_train_test = create_med_var(38048732, 'med_baricitinib', drug_train_test) 
     
     #Molnupiravir - 0 drug_eras and 0 unique users
     drug_train_test = create_med_var(643666235, 'med_molnupiravir', drug_train_test) 
     
-    #Covid Vaccinations - 11,466 drug_eras for 7741 unique_users. Also looked at codeset_id: 600531961 but it produced slightly fewer vaccinations. This definition is broader and includes the following drugs and their drug_concept_ids. I researched all of these drugs in Athena and they are valid.
+    #Covid Vaccinations - 11,466 drug_eras for 7741 unique_users. Also looked at codeset_id: 600531961 but it produced slightly fewer vaccinations. This definition is broader and includes the following drugs and their drug_concept_ids. Researched all of these drugs in Athena and they are valid.
     # SARS-CoV-2 (COVID-19) vaccine, mRNA-BNT162b2 0.1 MG/ML Injectable Suspension [Comirnaty] (1759206)
     # SARS-CoV-2 (COVID-19) vaccine, mRNA-1273 0.1 MG/ML Injectable Suspension (779414)
     # SARS-CoV-2 (COVID-19) vaccine, mRNA-BNT162b2 0.05 MG/ML Injectable Suspension (702118)
@@ -283,19 +288,18 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     F.sum("med_baricitinib").alias("med_baricitinib_sum"),\
     F.sum("med_molnupiravir").alias("med_molnupiravir_sum"))
 
-    #Creating 1 variable for meds as indicator since some meds used infrequently
+    #Creating 1 variable for meds as indicator since drug use relatively infrequent
     drug_sums = drug_sums.withColumn('med_sum', sum(drug_sums[col] for col in ['med_remdesivir_sum', 'med_bebtelovimab_sum', 'med_baricitinib_sum', 'med_molnupiravir_sum', 'med_paxlovid_sum']))
     drug_sums = drug_sums.withColumn('med_sum', F.when(F.col("med_sum")>0, 1).otherwise(0))
     return drug_sums.drop('med_remdesivir_sum', 'med_bebtelovimab_sum', 'med_baricitinib_sum', 'med_molnupiravir_sum', 'med_paxlovid_sum')
-
-    
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
     cohort=Input(rid="ri.foundry.main.dataset.fb2bf844-e144-4ce9-b1dc-864ed7d22eaf")
 )
-import pandas as pd
 #Removing users diagnosed with PASC in the 4 weeks after diagnosis and creating dummy variables for categorical variables
+import pandas as pd
+
 def model_prep(cohort):
     df = cohort.loc[cohort['pasc_code_prior_four_weeks']==0] 
     df = df.drop(columns=['test_ind', 'pasc_code_prior_four_weeks', 'race_cats', 'ethnicity_cats'])
@@ -306,6 +310,8 @@ def model_prep(cohort):
     Output(rid="ri.foundry.main.dataset.b908cc43-e8f6-4ad5-8211-03bcb179f7d4"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
+#Data preparation for neural network. Scale continuous columns and merge data back with one hot encoded columns
+
 from pyspark.ml.feature import MinMaxScaler
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml import Pipeline
@@ -432,10 +438,19 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.cb730975-2751-412d-b2c4-d222aa9388fb"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
+)
+def unnamed(model_prep):
+    
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
-from xgboost import XGBClassifier, cv, plot_importance
+#Running class-weighted XGBoost classifier on cohort. 
+
+from xgboost import XGBClassifier, plot_importance
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
@@ -482,7 +497,7 @@ def xgboost_model(model_prep):
     test_indices = x_test.index.tolist()
     person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
 
-    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value
+    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
     output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
     return output_with_preds
 

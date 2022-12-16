@@ -292,6 +292,18 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
     
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
+    cohort=Input(rid="ri.foundry.main.dataset.fb2bf844-e144-4ce9-b1dc-864ed7d22eaf")
+)
+import pandas as pd
+#Removing users diagnosed with PASC in the 4 weeks after diagnosis and creating dummy variables for categorical variables
+def model_prep(cohort):
+    df = cohort.loc[cohort['pasc_code_prior_four_weeks']==0] 
+    df = df.drop(columns=['test_ind', 'pasc_code_prior_four_weeks', 'race_cats', 'ethnicity_cats'])
+    return pd.get_dummies(df, columns=['who_severity', 'gender_cats'], drop_first=True)
+    
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
     Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),
@@ -368,9 +380,9 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.8e183dd1-9ab6-4b5a-9d0d-17450857105f"),
-    cohort=Input(rid="ri.foundry.main.dataset.fb2bf844-e144-4ce9-b1dc-864ed7d22eaf")
+    Output(rid="ri.vector.main.execute.8235fb12-d08e-4b67-847d-c009de72e40c"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
-def unnamed(cohort):
+def unnamed(model_prep):
     
 

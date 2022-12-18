@@ -403,9 +403,20 @@ start_time = time.time()
 
 def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
 
-    X = remove_sub1000.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = remove_sub1000['pasc_code_after_four_weeks']
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+    #Separating training from test sets
+    #perform outer join
+    outer = model_prep.merge(person, how='outer', indicator=True)
+    #perform anti-join
+    train = outer[(outer._merge=='left_only')].drop('_merge', axis=1)
+    test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
+    x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    y_train = train['pasc_code_after_four_weeks']
+    y_test = test['pasc_code_after_four_weeks']
+
+    # X = remove_sub1000.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # Y = remove_sub1000['pasc_code_after_four_weeks']
+    # x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     #Using best parameters from hyperparameter tuning
     params = xgb_hyperparam_tuning.to_dict(orient="list")
@@ -482,11 +493,12 @@ def xgb_hyperparam_tuning(model_prep, person):
     outer = model_prep.merge(person, how='outer', indicator=True)
     #perform anti-join
     train = outer[(outer._merge=='left_only')].drop('_merge', axis=1)
-    test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
-    x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    y_train = train['pasc_code_after_four_weeks']
-    y_test = test['pasc_code_after_four_weeks']
+    return train
+    # test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
+    # x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # y_train = train['pasc_code_after_four_weeks']
+    # y_test = test['pasc_code_after_four_weeks']
     
     # X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     # Y = model_prep['pasc_code_after_four_weeks']

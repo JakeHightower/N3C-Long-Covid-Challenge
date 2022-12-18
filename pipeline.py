@@ -389,6 +389,7 @@ def pivot_by_person(cci_count):
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
+    person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4"),
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 #Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
@@ -402,7 +403,7 @@ import pandas as pd
 import time
 start_time = time.time()
 
-def ruvos_predictions(xgb_hyperparam_tuning, model_prep):
+def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
 
     #Separating training from test sets
     train = model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())]

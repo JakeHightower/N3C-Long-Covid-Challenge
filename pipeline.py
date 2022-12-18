@@ -474,7 +474,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     #Using best parameters from hyperparameter tuning
     params = xgb_hyperparam_tuning.to_dict(orient="list")
     params = {k:v[0] for (k,v) in params.items()}
-    params = {k:int(v) for (k,v) in params.items() if any(k in x for x in ['max_depth', 'min_child_weight', 'reg_alpha', 'scale_pos_weight'])}
+    params = {k:int(v) for (k,v) in params.items() if any(k in x for x in ['max_depth', 'min_child_weight', 'reg_alpha', 'scale_pos_weight']) else k:v}
     params['use_label_encoder'] = False
 
     print(params)

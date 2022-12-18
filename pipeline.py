@@ -438,11 +438,14 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.44b85eaa-0ede-4696-8946-f697056a8188"),
-    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
+    Output(rid="ri.foundry.main.dataset.6edb8486-6f1c-4af3-b85a-f3b0dff380c1"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
+    pivot_by_person=Input(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020")
 )
-def unnamed(model_prep):
-    
+#Doing this just for XGBoost model
+def remove_sub1000(model_prep, pivot_by_person):
+    sub1000 = pivot_by_person.filter((pivot_by_person.condition_count>100)&(pivot_by_person.condition_count<1000)) 
+    return sub1000
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),

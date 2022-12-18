@@ -65,15 +65,19 @@ def condition_mapped(mapped_concepts, condition_era_train, condition_era):
     cci_count=Input(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
     pivot_by_person=Input(rid="ri.foundry.main.dataset.92ab38b0-054c-49d8-8473-8606f00dd020")
 )
-#Removing conditions that occur fewer than 100 times in dataset
+#Removing conditions that occur fewer than 1000 times in dataset (if <1000 people have a condition it occurs in fewer than 1.7% of the study population)
 from pyspark.sql import functions as F
+import time
+start_time = time.time()
 
 def conditions_only(pivot_by_person, cci_count):
-    sub100 = pivot_by_person.filter(pivot_by_person.condition_count<100) 
-    sub100_removed = cci_count.join(sub100, cci_count.pre_post_condition==sub100.condition, 'left_anti') #Keeping rows with conditions occurring 100+ times
-    conds = sub100_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
+    sub1000 = pivot_by_person.filter(pivot_by_person.condition_count<1000) 
+    sub1000_removed = cci_count.join(sub1000, cci_count.pre_post_condition==sub1000.condition, 'left_anti') #Keeping rows with conditions occurring 1000+ times
+    conds = sub1000_removed.groupBy("person_id").pivot("pre_post_condition").agg(F.lit(1)).fillna(0)
     #Rejoining with CCI counts
-    return conds.join(cci_count.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
+    df = conds.join(cci_count.dropDuplicates(['person_id', 'cci_count']).select('person_id', 'cci_count'), ['person_id'], 'right')
+    print(f"Execution time: {time.time() - start_time}")
+    return df
     
 
 @transform_pandas(

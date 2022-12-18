@@ -520,6 +520,8 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import numpy as np 
 import pandas as pd
+import time
+start_time = time.time()
 
 def xgboost_model(xgb_hyperparam_tuning, model_prep):
 
@@ -566,4 +568,6 @@ def xgboost_model(xgb_hyperparam_tuning, model_prep):
     #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
     output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
     return output_with_preds
+    
+    print(f"Execution time: {time.time() - start_time}")
 

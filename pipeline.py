@@ -438,17 +438,6 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
-    Output(rid="ri.vector.main.execute.10aa9030-baf3-4fe8-a831-ee5d9adf3bdb"),
-    xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
-)
-def unnamed(xgb_hyperparam_tuning):
-    print(xgb_hyperparam_tuning.to_dict(orient="list"))
-    
-    # df = xgb_hyperparam_tuning.melt()
-    # print(df.to_dict(orient='list'))
-    return
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
@@ -534,52 +523,47 @@ import pandas as pd
 
 def xgboost_model(xgb_hyperparam_tuning, model_prep):
 
-    # X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    # Y = model_prep['pasc_code_after_four_weeks']
-    # x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = model_prep['pasc_code_after_four_weeks']
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
-    param_dict = xgb_hyperparam_tuning.to_dict(orient="list")
-    param_dict = {k:v[0] for (k,v) in param_dict.items()}
-    print(param_dict)
     #Using best parameters from hyperparameter tuning
-    # params = test_df.to_dict()[0]
-    # params['use_label_encoder'] = False
+    params = xgb_hyperparam_tuning.to_dict(orient="list")
+    params = {k:v[0] for (k,v) in params.items()}
+    params['use_label_encoder'] = False
     
-    #Fit model
-    #Class Weighted XGBoost
-#     model = XGBClassifier(**params) 
-#     model.fit(x_train, y_train) 
+    #Fit model - Class Weighted XGBoost
+    model = XGBClassifier(**params) 
+    model.fit(x_train, y_train) 
 
-#     #Predictions on test set
-#     y_pred = model.predict(x_test)
-#     predictions = [round(value) for value in y_pred]
+    #Predictions on test set
+    y_pred = model.predict(x_test)
+    predictions = [round(value) for value in y_pred]
 
-#     #Running evaluation metrics
-#     accuracy = accuracy_score(y_test, predictions)
-#     print("Accuracy: %.2f%%" % (accuracy * 100.0))
-#     f1 = f1_score(y_test, predictions)
-#     print("f1: %.2f%%" % (f1 * 100.0))
-#     precision = precision_score(y_test, predictions)
-#     print("Precision: %.2f%%" % (precision * 100.0))
-#     recall = recall_score(y_test, predictions)
-#     print("Recall: %.2f%%" % (recall * 100.0))
-#     roc_auc = roc_auc_score(y_test, predictions)
-#     print("roc_auc: %.2f%%" % (roc_auc * 100.0))
-#     cm = confusion_matrix(y_test, predictions)
-#     print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+    #Running evaluation metrics
+    accuracy = accuracy_score(y_test, predictions)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
+    f1 = f1_score(y_test, predictions)
+    print("f1: %.2f%%" % (f1 * 100.0))
+    precision = precision_score(y_test, predictions)
+    print("Precision: %.2f%%" % (precision * 100.0))
+    recall = recall_score(y_test, predictions)
+    print("Recall: %.2f%%" % (recall * 100.0))
+    roc_auc = roc_auc_score(y_test, predictions)
+    print("roc_auc: %.2f%%" % (roc_auc * 100.0))
+    cm = confusion_matrix(y_test, predictions)
+    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
 
-# # Plot feature importance - top 10
-#     plot_importance(model, max_num_features=10)
-#     plt.tight_layout()
-#     plt.show()
+# Plot feature importance - top 10
+    plot_importance(model, max_num_features=10)
+    plt.tight_layout()
+    plt.show()
 
-#     #Return the person_id for test set
-#     test_indices = x_test.index.tolist()
-#     person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
+    #Return the person_id for test set
+    test_indices = x_test.index.tolist()
+    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
 
-#     #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
-#     output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
-#     return output_with_preds
-
-    
+    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
+    output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
+    return output_with_preds
 

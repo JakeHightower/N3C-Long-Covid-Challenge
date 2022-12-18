@@ -442,7 +442,8 @@ def pivot_by_person(cci_count):
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 def unnamed(xgb_hyperparam_tuning):
-    print xgb_hyperparam_tuning.melt().to_dict()
+    df = xgb_hyperparam_tuning.melt()
+    print(df.to_dict(orient='list'))
     return
 
 @transform_pandas(

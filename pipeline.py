@@ -451,6 +451,7 @@ def remove_sub1000(model_prep, pivot_by_person):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
+    remove_sub1000=Input(rid="ri.foundry.main.dataset.6edb8486-6f1c-4af3-b85a-f3b0dff380c1"),
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 #Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
@@ -464,10 +465,10 @@ import pandas as pd
 import time
 start_time = time.time()
 
-def ruvos_predictions(xgb_hyperparam_tuning):
+def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
 
-    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = model_prep['pasc_code_after_four_weeks']
+    X = remove_sub1000.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = remove_sub1000['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     #Using best parameters from hyperparameter tuning
@@ -512,7 +513,7 @@ def ruvos_predictions(xgb_hyperparam_tuning):
 
     #Return the person_id for test set
     test_indices = x_test.index.tolist()
-    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
+    person_id_df = remove_sub1000.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
 
     #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
     output_with_preds = pd.concat([pd.Series(y_prob).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),

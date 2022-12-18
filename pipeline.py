@@ -318,7 +318,7 @@ from pyspark.ml.feature import Imputer
 
 def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
-    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).dropDuplicates(['person_id'])
+    person_train_test = person_train.unionByName(person, allowMissingColumns=True).dropDuplicates(['person_id'])
 
     #Join test/train for outcomes
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True).dropDuplicates(['person_id'])

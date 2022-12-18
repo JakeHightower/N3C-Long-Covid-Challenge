@@ -445,7 +445,9 @@ def pivot_by_person(cci_count):
 #Doing this just for XGBoost model
 def remove_sub1000(model_prep, pivot_by_person):
     sub1000 = pivot_by_person.filter((pivot_by_person.condition_count>100)&(pivot_by_person.condition_count<1000)) 
-    return sub1000
+    #Create list of variables to drop in modeling dataset
+    cols_to_drop=sub1000.rdd.map(lambda x: x.condition).collect() #Converting column to list  
+    return model_prep.drop(*cols_to_drop)
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),

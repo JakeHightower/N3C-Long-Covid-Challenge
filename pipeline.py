@@ -96,16 +96,16 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
     condition_occurrence_training = condition_occurrence_train
     
     observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True)
-    observation_train_test = observation_train_test.dropDuplicates(['observation_id']) #DELETE FOR FINAL
+    observation_train_test = observation_train_test.dropDuplicates(['observation_id']) 
 
     mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True)
-    mm_train_test = mm_train_test.dropDuplicates(['visit_occurrence_id']) #DELETE FOR FINAL
+    mm_train_test = mm_train_test.dropDuplicates(['visit_occurrence_id']) 
 
     po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
-    po_train_test = po_train_test.dropDuplicates(['procedure_occurrence_id']) #DELETE FOR FINAL
+    po_train_test = po_train_test.dropDuplicates(['procedure_occurrence_id']) 
 
     condition_train_test = condition_occurrence_train.unionByName(condition_occurrence, allowMissingColumns=True)
-    condition_train_test = condition_train_test.dropDuplicates(['condition_occurrence_id']) #DELETE FOR FINAL
+    condition_train_test = condition_train_test.dropDuplicates(['condition_occurrence_id']) 
     
     #Ventilation - compared 2 codeset ids
     #469361388 - [ICU/MODS]IMV (v2) - contains 76 concepts - procedure, observation, condition - this defintion pulled up 6410 rows for 765 people which is way fewer than the 2nd definition although that definition has fewer concepts. 
@@ -450,6 +450,77 @@ def remove_sub1000(model_prep, pivot_by_person):
     return model_prep.drop(*cols_to_drop)
 
 @transform_pandas(
+    Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
+    xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
+)
+#Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
+
+from xgboost import XGBClassifier, plot_importance
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import numpy as np 
+import pandas as pd
+import time
+start_time = time.time()
+
+def ruvos_predictions(xgb_hyperparam_tuning):
+
+    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = model_prep['pasc_code_after_four_weeks']
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+
+    #Using best parameters from hyperparameter tuning
+    params = xgb_hyperparam_tuning.to_dict(orient="list")
+    params = {k:v[0] for (k,v) in params.items()}
+    params = {k:int(v) for (k,v) in params.items() if any(k in x for x in ['max_depth', 'min_child_weight', 'reg_alpha'])}
+    params['use_label_encoder'] = False
+
+    
+    #Fit model - Class Weighted XGBoost
+    model = XGBClassifier(**params) 
+    model.fit(x_train, y_train) 
+
+    #Predictions on test set
+    y_prob = model.predict_proba(x_test)
+    # keep probabilities for the positive outcome only
+    y_prob = y_prob[:, 1]
+    print(y_prob)
+
+    y_pred = model.predict(x_test)
+    print(y_pred)
+    predictions = [round(value) for value in y_pred]
+
+    #Running evaluation metrics
+    accuracy = accuracy_score(y_test, predictions)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
+    f1 = f1_score(y_test, predictions)
+    print("f1: %.2f%%" % (f1 * 100.0))
+    precision = precision_score(y_test, predictions)
+    print("Precision: %.2f%%" % (precision * 100.0))
+    recall = recall_score(y_test, predictions)
+    print("Recall: %.2f%%" % (recall * 100.0))
+    roc_auc = roc_auc_score(y_test, predictions)
+    print("roc_auc: %.2f%%" % (roc_auc * 100.0))
+    cm = confusion_matrix(y_test, predictions)
+    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+
+# Plot feature importance - top 10
+    plot_importance(model, max_num_features=10)
+    plt.tight_layout()
+    plt.show()
+
+    #Return the person_id for test set
+    test_indices = x_test.index.tolist()
+    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
+
+    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
+    output_with_preds = pd.concat([pd.Series(y_prob).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
+    print(f"Execution time: {time.time() - start_time}")
+    return output_with_preds
+    
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
     remove_sub1000=Input(rid="ri.foundry.main.dataset.6edb8486-6f1c-4af3-b85a-f3b0dff380c1")
 )
@@ -521,69 +592,4 @@ def xgb_hyperparam_tuning(remove_sub1000):
 
     print(f"Execution time: {time.time() - start_time}")
     return pd.DataFrame.from_dict(best_dict)
-
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
-    xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
-)
-#Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
-
-from xgboost import XGBClassifier, plot_importance
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
-from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-import numpy as np 
-import pandas as pd
-import time
-start_time = time.time()
-
-def xgboost_model(xgb_hyperparam_tuning):
-
-    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = model_prep['pasc_code_after_four_weeks']
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
-
-    #Using best parameters from hyperparameter tuning
-    params = xgb_hyperparam_tuning.to_dict(orient="list")
-    params = {k:v[0] for (k,v) in params.items()}
-    params = {k:int(v) for (k,v) in params.items() if any(k in x for x in ['max_depth', 'min_child_weight', 'reg_alpha'])}
-    params['use_label_encoder'] = False
-
-    
-    #Fit model - Class Weighted XGBoost
-    model = XGBClassifier(**params) 
-    model.fit(x_train, y_train) 
-
-    #Predictions on test set
-    y_pred = model.predict(x_test)
-    predictions = [round(value) for value in y_pred]
-
-    #Running evaluation metrics
-    accuracy = accuracy_score(y_test, predictions)
-    print("Accuracy: %.2f%%" % (accuracy * 100.0))
-    f1 = f1_score(y_test, predictions)
-    print("f1: %.2f%%" % (f1 * 100.0))
-    precision = precision_score(y_test, predictions)
-    print("Precision: %.2f%%" % (precision * 100.0))
-    recall = recall_score(y_test, predictions)
-    print("Recall: %.2f%%" % (recall * 100.0))
-    roc_auc = roc_auc_score(y_test, predictions)
-    print("roc_auc: %.2f%%" % (roc_auc * 100.0))
-    cm = confusion_matrix(y_test, predictions)
-    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
-
-# Plot feature importance - top 10
-    plot_importance(model, max_num_features=10)
-    plt.tight_layout()
-    plt.show()
-
-    #Return the person_id for test set
-    test_indices = x_test.index.tolist()
-    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
-
-    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
-    output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
-    print(f"Execution time: {time.time() - start_time}")
-    return output_with_preds
-    
 

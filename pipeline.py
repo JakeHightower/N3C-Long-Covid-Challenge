@@ -458,11 +458,13 @@ from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
 from sklearn.model_selection import train_test_split
+import time
+start_time = time.time()
 
 def xgb_hyperparam_tuning(remove_sub1000):
     
-    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = model_prep['pasc_code_after_four_weeks']
+    X = remove_sub1000.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = remove_sub1000['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
@@ -517,6 +519,7 @@ def xgb_hyperparam_tuning(remove_sub1000):
  
     best_dict = {key: [val] for key, val in best_hyperparams.items()}
 
+    print(f"Execution time: {time.time() - start_time}")
     return pd.DataFrame.from_dict(best_dict)
 
 @transform_pandas(

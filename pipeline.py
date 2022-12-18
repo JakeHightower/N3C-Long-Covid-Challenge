@@ -507,7 +507,13 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
 
 # Plot feature importance - top 10
     plt.style.use('default')
+    #Gain
     plot_importance(model, max_num_features=10, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
+    plt.tight_layout()
+    plt.show()
+
+    #Weight
+    plot_importance(model, max_num_features=10, grid=False, xlabel="Weight", show_values=False)
     plt.tight_layout()
     plt.show()
 
@@ -515,8 +521,8 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     test_indices = x_test.index.tolist()
     person_id_df = remove_sub1000.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
 
-    #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
-    output_with_preds = pd.concat([pd.Series(y_prob).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
+    #Returns dataframe with person_id and predicted value. 
+    output_with_preds = pd.concat([pd.Series(y_prob).to_frame(name='predictions'), person_id_df], axis=1)
     print(f"Execution time: {time.time() - start_time}")
     return output_with_preds
     

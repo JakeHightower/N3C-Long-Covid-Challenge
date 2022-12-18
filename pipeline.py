@@ -93,23 +93,20 @@ def conditions_only(pivot_by_person, cci_count):
     procedure_occurrence=Input(rid="ri.foundry.main.dataset.88523aaa-75c3-4b55-a79a-ebe27e40ba4f"),
     procedure_occurrence_train=Input(rid="ri.foundry.main.dataset.9a13eb06-de7d-482b-8f91-fb8c144269e3")
 )
+#Severity based on WHO guidelines
+
 from pyspark.sql import functions as F
 
-#Severity based on WHO guidelines
 def covid_severity(observation_train, observation, microvisits_to_macrovisits_train, microvisits_to_macrovisits, procedure_occurrence_train, concept_set_members, procedure_occurrence, person_all, condition_occurrence_train, condition_occurrence):
     condition_occurrence_training = condition_occurrence_train
     
-    observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True)
-    observation_train_test = observation_train_test.dropDuplicates(['observation_id']) 
+    observation_train_test = observation_train.unionByName(observation, allowMissingColumns=True).dropDuplicates(['observation_id']) 
 
-    mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True)
-    mm_train_test = mm_train_test.dropDuplicates(['visit_occurrence_id']) 
+    mm_train_test = microvisits_to_macrovisits_train.unionByName(microvisits_to_macrovisits, allowMissingColumns=True).dropDuplicates(['visit_occurrence_id']) 
 
-    po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True)
-    po_train_test = po_train_test.dropDuplicates(['procedure_occurrence_id']) 
+    po_train_test = procedure_occurrence_train.unionByName(procedure_occurrence, allowMissingColumns=True).dropDuplicates(['procedure_occurrence_id']) 
 
-    condition_train_test = condition_occurrence_train.unionByName(condition_occurrence, allowMissingColumns=True)
-    condition_train_test = condition_train_test.dropDuplicates(['condition_occurrence_id']) 
+    condition_train_test = condition_occurrence_train.unionByName(condition_occurrence, allowMissingColumns=True).dropDuplicates(['condition_occurrence_id']) 
     
     #Ventilation - compared 2 codeset ids
     #469361388 - [ICU/MODS]IMV (v2) - contains 76 concepts - procedure, observation, condition - this defintion pulled up 6410 rows for 765 people which is way fewer than the 2nd definition although that definition has fewer concepts. 
@@ -467,7 +464,9 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
+    Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
+    person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
 )
 import pandas as pd
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
@@ -477,64 +476,78 @@ from sklearn.model_selection import train_test_split
 import time
 start_time = time.time()
 
-def xgb_hyperparam_tuning(remove_sub1000):
+def xgb_hyperparam_tuning(model_prep, person):
+    #Anti join for training set and join for test set
+    #perform outer join
+    outer = model_prep.merge(person, how='outer', indicator=True)
+    #perform anti-join
+    train = outer[(outer._merge=='left_only')].drop('_merge', axis=1)
     
-    X = remove_sub1000.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = remove_sub1000['pasc_code_after_four_weeks']
-    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+    test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
+    
+    print(train.head())
+    print(len(train))
+    
+    print(test.head())
+    print(len(test))
+    return
 
-    space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
-        'gamma': hp.uniform ('gamma', 1,9),
-        'reg_alpha' : hp.quniform('reg_alpha', 40,180,1),
-        'reg_lambda' : hp.uniform('reg_lambda', 0,1),
-        'colsample_bytree' : hp.uniform('colsample_bytree', 0.5,1),
-        'min_child_weight' : hp.quniform('min_child_weight', 0, 10, 1),
-        'scale_pos_weight' : hp.choice('scale_pos_weight', [4, 5, 6, 7, 8]),
-        'n_estimators': 180,
-        'seed': 0
-    }
+    # X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # Y = model_prep['pasc_code_after_four_weeks']
+    # x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
-    def objective(space):
-        clf=XGBClassifier(n_estimators =space['n_estimators'], max_depth = int(space['max_depth']), gamma = space['gamma'],
-                        reg_alpha = int(space['reg_alpha']),min_child_weight=int(space['min_child_weight']),
-                        colsample_bytree=int(space['colsample_bytree']), scale_pos_weight=space['scale_pos_weight'], use_label_encoder=False)
+    # space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
+    #     'gamma': hp.uniform ('gamma', 1,9),
+    #     'reg_alpha' : hp.quniform('reg_alpha', 40,180,1),
+    #     'reg_lambda' : hp.uniform('reg_lambda', 0,1),
+    #     'colsample_bytree' : hp.uniform('colsample_bytree', 0.5,1),
+    #     'min_child_weight' : hp.quniform('min_child_weight', 0, 10, 1),
+    #     'scale_pos_weight' : hp.choice('scale_pos_weight', [4, 5, 6, 7, 8]),
+    #     'n_estimators': 180,
+    #     'seed': 0
+    # }
+
+    # def objective(space):
+    #     clf=XGBClassifier(n_estimators =space['n_estimators'], max_depth = int(space['max_depth']), gamma = space['gamma'],
+    #                     reg_alpha = int(space['reg_alpha']),min_child_weight=int(space['min_child_weight']),
+    #                     colsample_bytree=int(space['colsample_bytree']), scale_pos_weight=space['scale_pos_weight'], use_label_encoder=False)
         
-        evaluation = [(x_train, y_train), (x_test, y_test)]
+    #     evaluation = [(x_train, y_train), (x_test, y_test)]
 
-        clf.fit(x_train, y_train,
-                eval_set=evaluation, eval_metric="auc",
-                early_stopping_rounds=10,verbose=False)
+    #     clf.fit(x_train, y_train,
+    #             eval_set=evaluation, eval_metric="auc",
+    #             early_stopping_rounds=10,verbose=False)
 
-        predictions = clf.predict(x_test)
+    #     predictions = clf.predict(x_test)
 
-        accuracy = accuracy_score(y_test, predictions)
-        print("Accuracy: %.2f%%" % (accuracy * 100.0))
-        f1 = f1_score(y_test, predictions)
-        print("f1: %.2f%%" % (f1 * 100.0))
-        precision = precision_score(y_test, predictions)
-        print("Precision: %.2f%%" % (precision * 100.0))
-        recall = recall_score(y_test, predictions)
-        print("Recall: %.2f%%" % (recall * 100.0))
-        roc_auc = roc_auc_score(y_test, predictions)
-        print("roc_auc: %.2f%%" % (roc_auc * 100.0))
-        cm = confusion_matrix(y_test, predictions)
-        print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+    #     accuracy = accuracy_score(y_test, predictions)
+    #     print("Accuracy: %.2f%%" % (accuracy * 100.0))
+    #     f1 = f1_score(y_test, predictions)
+    #     print("f1: %.2f%%" % (f1 * 100.0))
+    #     precision = precision_score(y_test, predictions)
+    #     print("Precision: %.2f%%" % (precision * 100.0))
+    #     recall = recall_score(y_test, predictions)
+    #     print("Recall: %.2f%%" % (recall * 100.0))
+    #     roc_auc = roc_auc_score(y_test, predictions)
+    #     print("roc_auc: %.2f%%" % (roc_auc * 100.0))
+    #     cm = confusion_matrix(y_test, predictions)
+    #     print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
 
-        return {'loss': 1-roc_auc, 'status': STATUS_OK } 
+    #     return {'loss': 1-roc_auc, 'status': STATUS_OK } 
 
-    trials = Trials()
+    # trials = Trials()
 
-    best_hyperparams = fmin(fn = objective,
-                            space = space,
-                            algo = tpe.suggest,
-                            max_evals = 100,
-                            trials = trials)
+    # best_hyperparams = fmin(fn = objective,
+    #                         space = space,
+    #                         algo = tpe.suggest,
+    #                         max_evals = 100,
+    #                         trials = trials)
 
-    print("The best hyperparameters are : ","\n")
-    print(best_hyperparams)
+    # print("The best hyperparameters are : ","\n")
+    # print(best_hyperparams)
  
-    best_dict = {key: [val] for key, val in best_hyperparams.items()}
+    # best_dict = {key: [val] for key, val in best_hyperparams.items()}
 
-    print(f"Execution time: {time.time() - start_time}")
-    return pd.DataFrame.from_dict(best_dict)
+    # print(f"Execution time: {time.time() - start_time}")
+    # return pd.DataFrame.from_dict(best_dict)
 

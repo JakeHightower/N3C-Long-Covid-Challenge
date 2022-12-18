@@ -43,8 +43,7 @@ def cci_count(icd_match, concept_set_members, person_all):
 )
 #Merging all datasets into cohort
 def cohort(conditions_only, person_all, medications_vaccinations, covid_severity):
-    columns_to_drop = ['location_id', 'person_data_partner_id', 'gender_concept_id', 'race_concept_id', 'ethnicity_concept_id', 'bmi', 'state', 'bmi_cat', 'race_concept_name', 'gender_concept_name', 'ethnicity_concept_name']
-    person = person_all.select('person_id', 'test_ind', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
+    person = person_all.select('person_id', 'pasc_code_after_four_weeks', 'pasc_code_prior_four_weeks', 'age_at_covid_imputed', 'gender_cats', 'race_cats', 'ethnicity_cats')
     merged = person.join(conditions_only, 'person_id', 'left').join(medications_vaccinations, 'person_id', 'left').join(covid_severity, 'person_id', 'left')
     return merged.fillna(0, subset=(merged.columns[8:-1])) #Filling NAs for the condition columns 
 
@@ -303,7 +302,7 @@ import pandas as pd
 
 def model_prep(cohort):
     df = cohort.loc[cohort['pasc_code_prior_four_weeks']==0] 
-    df = df.drop(columns=['test_ind', 'pasc_code_prior_four_weeks', 'race_cats', 'ethnicity_cats'])
+    df = df.drop(columns=['pasc_code_prior_four_weeks', 'race_cats', 'ethnicity_cats'])
     return pd.get_dummies(df, columns=['who_severity', 'gender_cats'], drop_first=True)
     
 
@@ -319,13 +318,10 @@ from pyspark.ml.feature import Imputer
 
 def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVID_Silver_Standard_Blinded):
     #Join test/train for persons
-    person_test_ind = person.withColumn('test_ind', F.lit(1)) #Adding indicator that this person is part of the test set
-    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).fillna(0, subset='test_ind')#.dropDuplicates(['person_id']) #UNCOMMENT FOR FINAL
-    person_train_test = person_train_test.filter(person_train_test.test_ind==0) #DELETE FOR FINAL
+    person_train_test = person_train.unionByName(person_test_ind, allowMissingColumns=True).dropDuplicates(['person_id'])
 
     #Join test/train for outcomes
-    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True)#.dropDuplicates(['person_id']) #UNCOMMENT FOR FINAL
-    outcome_train_test = outcome_train_test.filter(outcome_train_test.pasc_code_after_four_weeks.isNotNull()) #DELETE FOR FINAL
+    outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True).dropDuplicates(['person_id'])
     
     #Joining person and outcome data
     person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
@@ -475,8 +471,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
-    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
-    person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4")
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
 import pandas as pd
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
@@ -486,15 +481,7 @@ from sklearn.model_selection import train_test_split
 import time
 start_time = time.time()
 
-def xgb_hyperparam_tuning(model_prep, person):
-    #Separating training from test sets
-    # train = model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())]
-    # test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
-    # x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    # x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    # y_train = train['pasc_code_after_four_weeks']
-    # y_test = test['pasc_code_after_four_weeks']
-    
+def xgb_hyperparam_tuning(model_prep):
     X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     Y = model_prep['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)

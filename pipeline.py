@@ -539,7 +539,7 @@ def xgboost_model(xgb_hyperparam_tuning, model_prep):
     # x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     param_dict = xgb_hyperparam_tuning.to_dict(orient="list")
-    param_dict = {k:v[0] for k,v in param_dict}
+    # param_dict = {k:v[0] for k,v in param_dict}
     print(param_dict)
     #Using best parameters from hyperparameter tuning
     # params = test_df.to_dict()[0]

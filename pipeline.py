@@ -482,6 +482,8 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     model = XGBClassifier(**params) 
     model.fit(x_train, y_train) 
 
+    print(model)
+
     #Predictions on test set
     y_prob = model.predict_proba(x_test)
     # keep probabilities for the positive outcome only

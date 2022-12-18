@@ -488,16 +488,16 @@ start_time = time.time()
 
 def xgb_hyperparam_tuning(model_prep, person):
     #Separating training from test sets
-    train = model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())]
-    test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
-    x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    y_train = train['pasc_code_after_four_weeks']
-    y_test = test['pasc_code_after_four_weeks']
+    # train = model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())]
+    # test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
+    # x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    # y_train = train['pasc_code_after_four_weeks']
+    # y_test = test['pasc_code_after_four_weeks']
     
-    # X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    # Y = model_prep['pasc_code_after_four_weeks']
-    # x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
+    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = model_prep['pasc_code_after_four_weeks']
+    x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
         'gamma': hp.uniform ('gamma', 1,9),

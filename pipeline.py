@@ -476,11 +476,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     params = {k:v[0] for (k,v) in params.items()}
     params_int = {k:int(v) for (k,v) in params.items() if any(k in x for x in ['max_depth', 'min_child_weight', 'reg_alpha', 'scale_pos_weight'])}
     params['use_label_encoder'] = False
-
     params.update(params_int)
-
-    print(params)
-
     
     #Fit model - Class Weighted XGBoost
     model = XGBClassifier(**params) 
@@ -492,11 +488,9 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     y_prob = model.predict_proba(x_test)
     # keep probabilities for the positive outcome only
     y_prob = y_prob[:, 1]
-    print(y_prob)
 
-    y_pred = model.predict(x_test)
-    print(y_pred)
-    predictions = [round(value) for value in y_pred]
+    predictions = [round(value) for value in y_prob]
+    print(list(zip(y_prob, predictions)))
 
     #Running evaluation metrics
     accuracy = accuracy_score(y_test, predictions)

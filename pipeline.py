@@ -388,6 +388,7 @@ def pivot_by_person(cci_count):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 #Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
@@ -401,7 +402,7 @@ import pandas as pd
 import time
 start_time = time.time()
 
-def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
+def ruvos_predictions(xgb_hyperparam_tuning, model_prep):
 
     #Separating training from test sets
     train = model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())]
@@ -463,7 +464,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
 
     #Return the person_id for test set
     test_indices = x_test.index.tolist()
-    person_id_df = remove_sub1000.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
+    person_id_df = model_prep.iloc[test_indices]['person_id'].to_frame().reset_index(drop=True)
 
     #Returns dataframe with person_id and predicted value. 
     output_with_preds = pd.concat([pd.Series(y_prob).to_frame(name='predictions'), person_id_df], axis=1)

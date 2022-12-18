@@ -438,6 +438,13 @@ def pivot_by_person(cci_count):
     return pd.melt(agg_df, var_name='condition', value_name='condition_count')
 
 @transform_pandas(
+    Output(rid="ri.vector.main.execute.44b85eaa-0ede-4696-8946-f697056a8188"),
+    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
+)
+def unnamed(model_prep):
+    
+
+@transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
 )
@@ -569,7 +576,7 @@ def xgboost_model(xgb_hyperparam_tuning, model_prep):
 
     #Returns dataframe with person_id, pasc_code_after_four_weeks and predicted value to use for ensembling. 
     output_with_preds = pd.concat([pd.Series(predictions).to_frame(name='predictions'), y_test.to_frame(name='pasc_code_after_four_weeks').reset_index(drop=True), person_id_df], axis=1) #x_test.reset_index(drop=True),
+    print(f"Execution time: {time.time() - start_time}")
     return output_with_preds
     
-    print(f"Execution time: {time.time() - start_time}")
 

@@ -451,7 +451,7 @@ def remove_sub1000(model_prep, pivot_by_person):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff"),
-    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
+    remove_sub1000=Input(rid="ri.foundry.main.dataset.6edb8486-6f1c-4af3-b85a-f3b0dff380c1")
 )
 import pandas as pd
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
@@ -459,7 +459,7 @@ from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
 from sklearn.model_selection import train_test_split
 
-def xgb_hyperparam_tuning(model_prep):
+def xgb_hyperparam_tuning(remove_sub1000):
     
     X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     Y = model_prep['pasc_code_after_four_weeks']
@@ -521,7 +521,6 @@ def xgb_hyperparam_tuning(model_prep):
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
-    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 #Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
@@ -535,7 +534,7 @@ import pandas as pd
 import time
 start_time = time.time()
 
-def xgboost_model(xgb_hyperparam_tuning, model_prep):
+def xgboost_model(xgb_hyperparam_tuning):
 
     X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     Y = model_prep['pasc_code_after_four_weeks']

@@ -532,7 +532,9 @@ def xgboost_model(xgb_hyperparam_tuning, model_prep):
     #Using best parameters from hyperparameter tuning
     params = xgb_hyperparam_tuning.to_dict(orient="list")
     params = {k:v[0] for (k,v) in params.items()}
+    params = {k:int(v) for (k,v) in params.items() if k.isin(['max_depth', 'min_child_weight', 'reg_alpha'])}
     params['use_label_encoder'] = False
+
     
     #Fit model - Class Weighted XGBoost
     model = XGBClassifier(**params) 

@@ -506,7 +506,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, remove_sub1000):
     print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
 
 # Plot feature importance - top 10
-    plt.style.use('classic')
+    plt.style.use('ggplot')
     plot_importance(model, max_num_features=10, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
     plt.tight_layout()
     plt.show()

@@ -307,58 +307,6 @@ def model_prep(cohort):
     
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.b908cc43-e8f6-4ad5-8211-03bcb179f7d4"),
-    model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831")
-)
-#Data preparation for neural network. Scale continuous columns and merge data back with one hot encoded columns
-
-from pyspark.ml.feature import MinMaxScaler
-from pyspark.ml.feature import VectorAssembler
-from pyspark.ml import Pipeline
-from pyspark.sql.functions import udf
-from pyspark.sql.types import DoubleType
-import time
-
-def normalize(model_prep):
-    start_time = time.time()
-    # Select only cols that need scaling (e.g. skip OHE)
-    df = model_prep.select("person_id", "age_at_covid_imputed", "med_sum", "cci_count", "pre_covid_vaccine_sum", "post_covid_vaccine_sum",)
-    print( "Before Scaling :")
-    df.show(5)
-
-    # UDF for converting column type from vector to double type
-    unlist = udf(lambda x: round(float(list(x)[0]),3), DoubleType())
-
-    # Iterating over columns to be scaled
-    for i in df.columns:
-        # skip if person_id
-        if i == "person_id":
-            continue
-        # VectorAssembler Transformation - Converting column to vector type
-        assembler = VectorAssembler(inputCols=[i],outputCol=i+"_Vect")
-
-        # MinMaxScaler Transformation
-        scaler = MinMaxScaler(inputCol=i+"_Vect", outputCol=i+"_Scaled")
-
-        # Pipeline of VectorAssembler and MinMaxScaler
-        pipeline = Pipeline(stages=[assembler, scaler])
-
-        # Fitting pipeline on dataframe
-        df = pipeline.fit(df).transform(df).withColumn(i+"_Scaled", unlist(i+"_Scaled")).drop(i, i+"_Vect")
-
-    print("After Scaling :")
-    df.show(5)
-
-    # Join scaled df back to original
-    joined_df = model_prep.join(df,["person_id"])
-
-    joined_df.show(5)
-
-    print(f"Execution time: {time.time() - start_time}")
-    return joined_df.drop("age_at_covid_imputed", "med_sum", "cci_count", "pre_covid_vaccine_sum", "post_covid_vaccine_sum",)
-    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.0d5a4646-5221-432c-b937-8b8841f6162d"),
     Long_COVID_Silver_Standard_Blinded=Input(rid="ri.foundry.main.dataset.cb65632b-bdff-4aa9-8696-91bc6667e2ba"),
     Long_COVID_Silver_Standard_train=Input(rid="ri.foundry.main.dataset.3ea1038c-e278-4b0e-8300-db37d3505671"),

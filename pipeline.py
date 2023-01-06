@@ -430,6 +430,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
     #Predictions on test set
     y_prob = model.predict_proba(x_test)
     # keep probabilities for the positive outcome only
+    print (y_prob)
     y_prob = y_prob[:, 1]
 
     predictions = [round(value) for value in y_prob]

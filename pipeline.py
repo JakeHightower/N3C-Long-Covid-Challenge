@@ -301,7 +301,7 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
 import pandas as pd
 
 def model_prep(cohort):
-    df = cohort.loc[cohort['pasc_code_prior_four_weeks']==0] 
+    df = cohort.loc[(cohort['pasc_code_prior_four_weeks']==0)|(pd.isna(cohort['pasc_code_after_four_weeks']))] 
     df = df.drop(columns=['pasc_code_prior_four_weeks', 'race_cats', 'ethnicity_cats'])
     return pd.get_dummies(df, columns=['who_severity', 'gender_cats'], drop_first=True)
     

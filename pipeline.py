@@ -403,7 +403,7 @@ start_time = time.time()
 def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
 
     #Separating training from test sets
-    train = model_prep.loc[~model_prep['person_id'].isin(person_train['person_id'].tolist())]
+    train = pd.DataFrame(model_prep.loc[~model_prep['person_id'].isin(person_train['person_id'].tolist())])
     test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
     x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])

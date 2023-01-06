@@ -486,7 +486,12 @@ import time
 start_time = time.time()
 
 def xgb_hyperparam_tuning(model_prep):
-    X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    print (len(model_prep))
+    training_data = model_prep[~pd.isna(model_prep['pasc_code_after_four_weeks'])]
+    print (len(training_data))
+    return training_data
+
+    """X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     Y = model_prep['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
@@ -543,5 +548,5 @@ def xgb_hyperparam_tuning(model_prep):
     best_dict = {key: [val] for key, val in best_hyperparams.items()}
 
     print(f"Execution time: {time.time() - start_time}")
-    return pd.DataFrame.from_dict(best_dict)
+    return pd.DataFrame.from_dict(best_dict)"""
 

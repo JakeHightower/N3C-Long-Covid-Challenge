@@ -407,6 +407,8 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
     test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
     x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    print (x_test)
+    exit()
     y_train = train['pasc_code_after_four_weeks']
     y_test = test['pasc_code_after_four_weeks']
 

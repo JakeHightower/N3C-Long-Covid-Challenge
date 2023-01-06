@@ -1,4 +1,4 @@
-
+import pyspark
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.d5a82b65-cb77-4c5b-a6f9-1d2c24b34a9b"),
@@ -408,7 +408,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
     x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     print (x_test)
-    return person
+    return spark.createDataFrame(person)
     y_train = train['pasc_code_after_four_weeks']
     y_test = test['pasc_code_after_four_weeks']
 

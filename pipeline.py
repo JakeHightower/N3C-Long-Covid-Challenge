@@ -452,14 +452,15 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
 
 # Plot feature importance - top 10
     plt.style.use('default')
-    #Gain
-    plot_importance(model, max_num_features=50, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
-    #plt.rcParams["figure.figsize"] = (45,5)
+    #gain
+    plt.rcParams["figure.figsize"] = (45,5)
+    plot_importance(model, max_num_features=30, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
+    #
     plt.tight_layout()
     plt.show()
 
     #Weight
-    plot_importance(model, max_num_features=50, grid=False, xlabel="Weight", show_values=False)
+    plot_importance(model, max_num_features=30, grid=False, xlabel="Weight", show_values=False)
     #plt.rcParams["figure.figsize"] = (45,5)
     plt.tight_layout()
     plt.show()

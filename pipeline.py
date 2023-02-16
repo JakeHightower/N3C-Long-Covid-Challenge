@@ -454,7 +454,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
     plt.style.use('default')
     #gain
     plt.rcParams["figure.figsize"] = (20,30)
-    plt.rcParams["text.fontsize"] = 30
+    plt.rcParams["font.size"] = 30
     plot_importance(model, max_num_features=50, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
     #
     plt.tight_layout()

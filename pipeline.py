@@ -386,7 +386,6 @@ def pivot_by_person(cci_count):
     Output(rid="ri.foundry.main.dataset.f267bdc4-9cee-45e7-8ba2-1042dbaa3623"),
     model_prep=Input(rid="ri.foundry.main.dataset.7e421db4-19fe-437d-b705-f696bbc9f831"),
     person=Input(rid="ri.foundry.main.dataset.06629068-25fc-4802-9b31-ead4ed515da4"),
-    person_train=Input(rid="ri.foundry.main.dataset.f71ffe18-6969-4a24-b81c-0e06a1ae9316"),
     xgb_hyperparam_tuning=Input(rid="ri.foundry.main.dataset.cec62123-8cbd-42a8-8f20-cd5a18438cff")
 )
 #Running class-weighted XGBoost classifier on cohort using optimal parameters from hyperparameter tuning. 
@@ -400,15 +399,15 @@ import pandas as pd
 import time
 start_time = time.time()
 
-def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
+def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
 
     #Separating training from test sets
-    train = pd.DataFrame(model_prep.loc[~model_prep['person_id'].isin(person_train['person_id'].tolist())])
+    train = pd.DataFrame(model_prep.loc[~model_prep['person_id'].isin(person['person_id'].tolist())])
     test = model_prep.loc[model_prep['person_id'].isin(person['person_id'].tolist())]
+    
     x_train = train.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
     x_test = test.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    print (x_test)
-    return xgb_hyperparam_tuning
+    
     y_train = train['pasc_code_after_four_weeks']
     y_test = test['pasc_code_after_four_weeks']
 
@@ -438,7 +437,7 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
     predictions = [round(value) for value in y_prob]
 
     #Running evaluation metrics
-    accuracy = accuracy_score(y_test, predictions)
+    """accuracy = accuracy_score(y_test, predictions)
     print("Accuracy: %.2f%%" % (accuracy * 100.0))
     f1 = f1_score(y_test, predictions)
     print("f1: %.2f%%" % (f1 * 100.0))
@@ -449,17 +448,17 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person, person_train):
     roc_auc = roc_auc_score(y_test, predictions)
     print("roc_auc: %.2f%%" % (roc_auc * 100.0))
     cm = confusion_matrix(y_test, predictions)
-    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])
+    print('tn', cm[0, 0], 'fp', cm[0, 1], 'fn', cm[1, 0], 'tp', cm[1, 1])"""
 
 # Plot feature importance - top 10
     plt.style.use('default')
     #Gain
-    plot_importance(model, max_num_features=10, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
+    plot_importance(model, max_num_features=30, importance_type="gain", grid=False, xlabel="Average gain", show_values=False)
     plt.tight_layout()
     plt.show()
 
     #Weight
-    plot_importance(model, max_num_features=10, grid=False, xlabel="Weight", show_values=False)
+    plot_importance(model, max_num_features=30, grid=False, xlabel="Weight", show_values=False)
     plt.tight_layout()
     plt.show()
 
@@ -486,13 +485,11 @@ import time
 start_time = time.time()
 
 def xgb_hyperparam_tuning(model_prep):
-    print (len(model_prep))
+    
     training_data = model_prep[~pd.isna(model_prep['pasc_code_after_four_weeks'])]
-    print (len(training_data))
-    return training_data
 
-    """X = model_prep.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
-    Y = model_prep['pasc_code_after_four_weeks']
+    X = training_data.drop(columns=['pasc_code_after_four_weeks', 'person_id'])
+    Y = training_data['pasc_code_after_four_weeks']
     x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123, stratify=Y)
 
     space={'max_depth': hp.quniform("max_depth", 3, 18, 1),
@@ -548,5 +545,5 @@ def xgb_hyperparam_tuning(model_prep):
     best_dict = {key: [val] for key, val in best_hyperparams.items()}
 
     print(f"Execution time: {time.time() - start_time}")
-    return pd.DataFrame.from_dict(best_dict)"""
+    return pd.DataFrame.from_dict(best_dict)
 

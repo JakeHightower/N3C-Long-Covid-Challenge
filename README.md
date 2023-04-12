@@ -17,8 +17,14 @@ How To Use This
 ---------------
 
 1. Run `pip install -r requirements.txt` to install dependencies
-2. Run cohort creation, Tim Bergquist will make available synpuf synthetic OMOP data for repeatability
-3. Run data_preparation.py (create OMAP Mappings & feature engineering)
-4. Run model_prep.py
-5. Run xgboost_hyperparam_tuning.py
-6. Run ruvos_predictions.py
+2a. For admin users in the N3C enclave, you can extract directly from the 'pipeline.py' file directly which contains all of the transforms to recreate our model.
+2b. For users trying to run this independently through GitHub, note this model runs entirely on Python and assumes you have a PySpark environment set up, mirroring that of the N3C Enclave.
+3. Navigate to /src and run all of 'final_pipeline.py'. Due to size limitations, the following data sets are not included in the /data directory and will need to be manually imported into the code, these sections are discussed and marked clearly in commented code at the top of the final_pipeline.py file. Datasets not included but required are:
+
+     Enclave Name                      Python Script Naming Convention
+# 1. concept                       --> concept_train & concept
+# 2. condition_occurence           --> condition_occurence_train & condition_occurence
+# 3. microvisits_to_macrovisits    --> microvisits_to_macrovisits_train & microvisits_to_macrovisits
+# 4. observation                   --> observation_train & observation
+# 5. procedure_occurence           --> procedure_occurence_train & procedure_occurence
+ 

@@ -43,6 +43,8 @@ Summary: The following script can be used to locally run our N3C Long Covid Chal
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from pyspark.ml.feature import Imputer
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
 import pandas as pd
 import numpy as np
 import time
@@ -60,26 +62,34 @@ import matplotlib.pyplot as plt
 #-----------------------------
 # Creat Mapped Concepts
 #-----------------------------
-def mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2):
-    #Grabbing all maps_to relationships between concepts where the map doesn't map to itself
-    maps_to = concept_relationship.filter((concept_relationship.relationship_id=="Maps to") & (concept_relationship.concept_id_1!=concept_relationship.concept_id_2))
+def mapped_concepts(concept_relationship, concept, DXCCSR_v2021):
 
-    #ICD10s for all conditions
-    concept_icd10 = concept.filter((concept.domain_id=="Condition") & (concept.vocabulary_id=="ICD10CM") & (concept.invalid_reason.isNull()))
-    concept_icd10 = concept_icd10.withColumn("concept_code_clean", F.regexp_replace("concept_code", "\.", ''))
+    try:
+        #check if a mapped_concepts file exists
+        mapped_concepts_file = spark.read.option("header",True).csv("../data/mapped_concepts.csv")
 
-    concept_icd10 = concept_icd10.alias('concept_icd10')
-    maps_to = maps_to.alias('maps_to')
+        return mapped_concepts_file
+    
+    except FileNotFoundError:
+        #Grabbing all maps_to relationships between concepts where the map doesn't map to itself
+        maps_to = concept_relationship.filter((concept_relationship.relationship_id=="Maps to") & (concept_relationship.concept_id_1!=concept_relationship.concept_id_2))
 
-    #Joining concept_relationship and concept tables. This table has 120,696 rows.
-    concept_map = maps_to.join(concept_icd10,concept_icd10.concept_id == maps_to.concept_id_1,'inner').select('concept_icd10.concept_id', 'concept_icd10.concept_name', 'concept_icd10.concept_code_clean', 'maps_to.concept_id_1', 'maps_to.concept_id_2')
+        #ICD10s for all conditions
+        concept_icd10 = concept.filter((concept.domain_id=="Condition") & (concept.vocabulary_id=="ICD10CM") & (concept.invalid_reason.isNull()))
+        concept_icd10 = concept_icd10.withColumn("concept_code_clean", F.regexp_replace("concept_code", "\.", ''))
 
-    #Pulling in CCSR groupings, DXCCSR_v2021_2 data table has 73,211 rows
-    ccsr = DXCCSR_v2021_2.withColumn("icd10cm_clean", F.regexp_replace("`ICD-10-CM_CODE`", "'", ''))
-    ccsr = ccsr.withColumn("default_ccsr_category_op_clean", F.regexp_replace("Default_CCSR_CATEGORY_OP", "'", ''))
+        concept_icd10 = concept_icd10.alias('concept_icd10')
+        maps_to = maps_to.alias('maps_to')
 
-    #Final table has 125,203 rows. 26,723 rows (containing 20,724 unique icd10 codes) are in the concept table but not in the ccsr table
-    return concept_map.join(ccsr, concept_map.concept_code_clean==ccsr.icd10cm_clean,'outer')
+        #Joining concept_relationship and concept tables. This table has 120,696 rows.
+        concept_map = maps_to.join(concept_icd10,concept_icd10.concept_id == maps_to.concept_id_1,'inner').select('concept_icd10.concept_id', 'concept_icd10.concept_name', 'concept_icd10.concept_code_clean', 'maps_to.concept_id_1', 'maps_to.concept_id_2')
+
+        #Pulling in CCSR groupings, DXCCSR_v2021_2 data table has 73,211 rows
+        ccsr = DXCCSR_v2021.withColumn("icd10cm_clean", F.regexp_replace("`ICD-10-CM_CODE`", "'", ''))
+        ccsr = ccsr.withColumn("default_ccsr_category_op_clean", F.regexp_replace("Default_CCSR_CATEGORY_OP", "'", ''))
+
+        #Final table has 125,203 rows. 26,723 rows (containing 20,724 unique icd10 codes) are in the concept table but not in the ccsr table
+        return concept_map.join(ccsr, concept_map.concept_code_clean==ccsr.icd10cm_clean,'outer')
 
 #-----------------------------
 # Map Conditions
@@ -126,12 +136,15 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     outcome_train_test = Long_COVID_Silver_Standard_train.unionByName(Long_COVID_Silver_Standard_Blinded, allowMissingColumns=True).dropDuplicates(['person_id'])
 
     #Joining person and outcome data
-    person_outcome = person_train_test.join(outcome_train_test, 'person_id', 'inner')
+    person_outcome = person_train_test.join(outcome_train_test, outcome_train_test.person_id==person_train_test.person_id, 'inner').drop(outcome_train_test.person_id)
+
 
     #Cleaning demographics
     #Calculating age at covid dx, if they're 90 or older, set age at 90. If birthday data is missing, impute median.
     person_outcome = person_outcome.withColumn("date_of_birth", F.to_date(F.expr("make_date(year_of_birth, month_of_birth, 1)"), "yyyy-MM-dd"))
-    person_outcome = person_outcome.withColumn("age_at_covid", F.when(F.col("is_age_90_or_older"), 90).otherwise(F.round(F.datediff(F.col("covid_index"), F.col("date_of_birth"))/365.25, 0)))
+    person_outcome = person_outcome.withColumn("age_at_covid", F.round(F.datediff(F.col("covid_index"), F.col("date_of_birth"))/365.25, 0))
+
+
 
     #Imputing missing values for age_at_covid - using median since only 2% are missing
     imputer = Imputer(inputCols = ['age_at_covid'],
@@ -155,7 +168,7 @@ def person_all(person_train, person, Long_COVID_Silver_Standard_train, Long_COVI
     person_outcome = person_outcome.withColumn('race_cats',func_udf(person_outcome['race_concept_name']))
     #Removing spaces for dummy variable conversion
     person_outcome = person_outcome.withColumn('race_cats', F.regexp_replace('race_cats', ' ', '_'))
-    person_outcome.groupBy('race_cats').count().show(20, False) #Total count
+    #person_outcome.groupBy('race_cats').count().show(20, False) #Total count
 
     #Cleaning ethnicity
     person_outcome=person_outcome.withColumn("ethnicity_cats", F.when(F.col("ethnicity_concept_name").isin(['Other/Unknown', 'No matching concept', 'Unknown', 'No information', 'Other']), 'Other_unknown').otherwise(F.col("ethnicity_concept_name")))
@@ -191,32 +204,35 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
 
     #Looking at 7 days before and 4 weeks after (end of study data) for IMV and ECMO
     #Pull in data for relevant time periods for each user
-    df = person_all.withColumn('pre_covid_7', F.date_sub(person_all['covid_index'], 7))
+    df = person_all.withColumn('pre_covid_7', F.date_sub(person_all['covid_index'], 7)).alias("df")
 
-    proc_subset = df.join(po_train_test, 'person_id', 'inner').filter(po_train_test.procedure_date >= df.pre_covid_7)
-    obs_subset = df.join(observation_train_test, 'person_id', 'inner').filter(observation_train_test.observation_date >= df.pre_covid_7)
-    cond_subset = df.join(condition_train_test, 'person_id', 'inner').filter(condition_train_test.condition_start_date >= df.pre_covid_7)
+    proc_subset = df.join(po_train_test, 'person_id', 'inner').filter(po_train_test.procedure_date >= df.pre_covid_7).drop('df.person_id')
+    
+    obs_subset = df.join(observation_train_test, 'person_id', 'inner').filter(observation_train_test.observation_date >= df.pre_covid_7).drop('df.person_id')
+
+    cond_subset = df.join(condition_train_test, 'person_id', 'inner').filter(condition_train_test.condition_start_date >= df.pre_covid_7).drop('df.person_id')
+
 
     #Ventilation
     vent_concept = concept_set_members.filter(F.col("codeset_id")==618758765)
 
     #vent defintion pulled up 13,106 rows for 1346 people
     vent_proc = proc_subset.join(vent_concept, proc_subset.procedure_concept_id==vent_concept.concept_id,'inner')
-    vent_proc.groupBy("procedure_concept_name").count().show(20, False)
-    vent_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #vent_proc.groupBy("procedure_concept_name").count().show(20, False)
+    #vent_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     #Searching observation table for ventilation
     vent_obs = obs_subset.join(vent_concept, obs_subset.observation_concept_id==vent_concept.concept_id,'inner')
-    vent_obs.groupBy("observation_concept_name").count().show(20, False)
-    vent_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #vent_obs.groupBy("observation_concept_name").count().show(20, False)
+    #vent_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     #Pulling in conditions table
     vent_cond = cond_subset.join(vent_concept, cond_subset.condition_concept_id==vent_concept.concept_id,'inner')
-    vent_cond.groupBy("condition_concept_name").count().show(20, False)
-    vent_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #vent_cond.groupBy("condition_concept_name").count().show(20, False)
+    #vent_cond.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     final_vent = vent_proc.drop('data_partner_id', 'provider_id').unionByName(vent_obs.drop('data_partner_id', 'provider_id'), allowMissingColumns=True).unionByName(vent_cond.drop('data_partner_id', 'provider_id'), allowMissingColumns=True)
-    final_vent.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #final_vent.select(F.countDistinct("person_id")).show() #Distinct number of people
     final_vent = final_vent.dropDuplicates(['person_id'])
 
     #ECMO - 415149730 - procedure, observation tables
@@ -224,25 +240,27 @@ def covid_severity(observation_train, observation, microvisits_to_macrovisits_tr
 
     #ecmo defintion pulled up xx rows for xx people
     ecmo_proc = proc_subset.join(ecmo_concept, proc_subset.procedure_concept_id==ecmo_concept.concept_id,'inner')
-    ecmo_proc.groupBy("procedure_concept_name").count().show(20, False)
-    ecmo_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #ecmo_proc.groupBy("procedure_concept_name").count().show(20, False)
+    #ecmo_proc.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     #Pulling in observation table to see if adds anyone new
     ecmo_obs = obs_subset.join(ecmo_concept, obs_subset.observation_concept_id==ecmo_concept.concept_id,'inner')
-    ecmo_obs.groupBy("observation_concept_name").count().show(20, False)
-    ecmo_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #ecmo_obs.groupBy("observation_concept_name").count().show(20, False)
+    #ecmo_obs.select(F.countDistinct("person_id")).show() #Distinct number of people
 
     final_ecmo = ecmo_proc.drop('data_partner_id', 'provider_id').unionByName(ecmo_obs.drop('data_partner_id', 'provider_id'), allowMissingColumns=True)
-    final_ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
+    #final_ecmo.select(F.countDistinct("person_id")).show() #Distinct number of people
     final_ecmo = final_ecmo.dropDuplicates(['person_id'])
 
     #Creating indicators for users that had either ECMO or IMV
     final_ecmo_vent = final_ecmo.unionByName(final_vent, allowMissingColumns=True).dropDuplicates(['person_id']).withColumn('who_severity', F.lit('Severe')).select('person_id', 'who_severity')
 
-    ecmo_vent_person_ids = final_ecmo_vent.rdd.map(lambda x: x.person_id).collect() #Converting column to list
+    #ecmo_vent_person_ids = final_ecmo_vent.rdd.map(lambda x: x.person_id).collect() #Converting column to list
+
+    mm_train_test = mm_train_test.join(final_ecmo_vent, on="person_id", how="left").drop(final_ecmo_vent.person_id)
 
     #Logic - if they have a micro/macrovisit that started on or after 7 days before dx test and till the end of FU then mark them as that category
-    visit_subset = df.join(mm_train_test, 'person_id', 'inner').filter((~mm_train_test.person_id.isin(ecmo_vent_person_ids)) & ((mm_train_test.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(mm_train_test.visit_start_date, mm_train_test.visit_end_date))|(df.covid_index.between(mm_train_test.macrovisit_start_date, mm_train_test.macrovisit_end_date))))
+    visit_subset = df.join(mm_train_test, 'person_id', 'inner').filter(col("who_severity").isNull() & ((mm_train_test.visit_start_date >= df.pre_covid_7)|(df.covid_index.between(mm_train_test.visit_start_date, mm_train_test.visit_end_date))|(df.covid_index.between(mm_train_test.macrovisit_start_date, mm_train_test.macrovisit_end_date))))
 
     #Take the most severe visit per person during 7 days pre covid diagnosis to the end of follow up
     visit_grouped = visit_subset.groupby("person_id").agg(F.concat_ws(", ", F.collect_list(visit_subset.visit_concept_name)).alias("concat_visit_concept_name"))
@@ -267,8 +285,8 @@ def medications_vaccinations(drug_era_train, drug_era, concept_set_members, pers
         codeset = concept_set_members.filter(F.col("codeset_id")==codeset_num)
         concepts=codeset.rdd.map(lambda x: x.concept_id).collect() #Converting column to list
         df = df.withColumn(codeset_str, F.when((F.col("drug_concept_id").isin(concepts)), 1).otherwise(0))
-        df.groupBy(codeset_str).count().show() #Total count
-        df.filter(df[codeset_str]==1).select(F.countDistinct("person_id")).show() #Distinct number of people
+        #df.groupBy(codeset_str).count().show() #Total count
+        #df.filter(df[codeset_str]==1).select(F.countDistinct("person_id")).show() #Distinct number of people
         return df
 
     #Paxlovid - 280 drug_eras for paxlovid and 277 unique users. Also looked at codeset_ids: 798981734, 854747727, all produced the same numbers.
@@ -541,36 +559,147 @@ def ruvos_predictions(xgb_hyperparam_tuning, model_prep, person):
 
 
 
-
+spark = SparkSession.builder.getOrCreate()
 
 #==============================================================================
 # Load Datasets
 #==============================================================================
 
 #concept_set_members
-concept_set_members = spark.read.csv("/data/concept_set_members.csv")
+concept_set_members = spark.read.option("header",True).csv("../data/concept_set_members.csv")
 
-#DXCCSR_v2021-2
-DXCCSR_v2021 = spark.read.csv("/data/DXCCSR_v2021.csv")
+#concepts and concept relationships
+concept_relationship = spark.read.option("header",True).csv("../data/concept_relationship.csv")
+concept = spark.read.option("header",True).csv("../data/concept.csv")
 
-#mapped_concepts
-mapped_concepts = spark.read.csv("/data/mapped_concepts.csv")
+concept_names = concept.select("concept_id", "concept_name")
+
+#DXCCSR_v2021
+DXCCSR_v2021 = spark.read.option("header",True).csv("../data/DXCCSR_v2021.csv")
 
 #condition_era
-condition_era_train = spark.read.csv("/data/train/condition_era.csv")
-condition_era = spark.read.csv("/data/test/condition_era.csv")
+condition_era_train = spark.read.option("header",True).csv("../data/training/condition_era.csv")
+condition_era_train = condition_era_train.join(concept_names,concept_names.concept_id == condition_era_train.condition_concept_id,'left')\
+    .select('condition_era_id', 'person_id', 'condition_concept_id', 'concept_name', 'condition_era_start_date', 'condition_era_end_date', 'condition_occurrence_count')\
+        .withColumnRenamed('concept_name', 'condition_concept_name')
+
+
+condition_era = spark.read.option("header",True).csv("../data/testing/condition_era.csv")
+condition_era = condition_era.join(concept_names,concept_names.concept_id == condition_era.condition_concept_id,'left')\
+    .select('condition_era_id', 'person_id', 'condition_concept_id', 'concept_name', 'condition_era_start_date', 'condition_era_end_date', 'condition_occurrence_count')\
+        .withColumnRenamed('concept_name', 'condition_concept_name')
+
 
 #drug_era
-drug_era_train = spark.read.csv("/data/train/drug_era.csv")
-drug_era = spark.read.csv("/data/test/drug_era.csv")
+drug_era_train = spark.read.option("header",True).csv("../data/training/drug_era.csv")
+drug_era_train = drug_era_train.join(concept_names,concept_names.concept_id == drug_era_train.drug_concept_id,'left')\
+    .select('drug_era_id', 'person_id', 'drug_concept_id', 'concept_name', 'drug_era_start_date', 'drug_era_end_date', 'drug_exposure_count', 'gap_days')\
+        .withColumnRenamed('concept_name', 'drug_concept_name')
+
+drug_era = spark.read.option("header",True).csv("../data/testing/drug_era.csv")
+drug_era = drug_era.join(concept_names,concept_names.concept_id == drug_era.drug_concept_id,'left')\
+    .select('drug_era_id', 'person_id', 'drug_concept_id', 'concept_name', 'drug_era_start_date', 'drug_era_end_date', 'drug_exposure_count', 'gap_days')\
+        .withColumnRenamed('concept_name', 'drug_concept_name')
+
+
+#observation
+observation_train = spark.read.option("header",True).csv("../data/training/observation.csv").alias('observation_train')
+observation_train = observation_train.join(concept_names, concept_names.concept_id == observation_train.observation_concept_id, 'left')\
+    .select('observation_train.*', 'concept_name').withColumnRenamed('concept_name', 'observation_concept_name')
+
+observation = spark.read.option("header",True).csv("../data/testing/observation.csv").alias('observation')
+observation = observation.join(concept_names, concept_names.concept_id == observation.observation_concept_id, 'left')\
+    .select('observation.*', 'concept_name').withColumnRenamed('concept_name', 'observation_concept_name')
+
+
+#microvisit to macrovisit tables
+microvisits_to_macrovisits_train = spark.read.option("header",True).csv("../data/training/microvisits_to_macrovisits.csv").alias('microvisits_to_macrovisits_train')
+microvisits_to_macrovisits_train = microvisits_to_macrovisits_train.join(concept_names, concept_names.concept_id == microvisits_to_macrovisits_train.visit_concept_id, 'left')\
+    .select('microvisits_to_macrovisits_train.*', 'concept_name').withColumnRenamed('concept_name', 'visit_concept_name')
+
+microvisits_to_macrovisits = spark.read.option("header",True).csv("../data/testing/microvisits_to_macrovisits.csv").alias('microvisits_to_macrovisits')
+microvisits_to_macrovisits = microvisits_to_macrovisits.join(concept_names, concept_names.concept_id == microvisits_to_macrovisits.visit_concept_id, 'left')\
+    .select('microvisits_to_macrovisits.*', 'concept_name').withColumnRenamed('concept_name', 'visit_concept_name')
+
+
+#procedure occurrence
+procedure_occurrence_train = spark.read.option("header",True).csv("../data/training/procedure_occurrence.csv").alias('procedure_occurrence_train')
+procedure_occurrence_train = procedure_occurrence_train.join(concept_names, concept_names.concept_id == procedure_occurrence_train.procedure_concept_id, 'left')\
+    .select('procedure_occurrence_train.*', 'concept_name').withColumnRenamed('concept_name', 'procedure_concept_name')
+
+procedure_occurrence = spark.read.option("header",True).csv("../data/testing/procedure_occurrence.csv").alias('procedure_occurrence')
+procedure_occurrence = procedure_occurrence.join(concept_names, concept_names.concept_id == procedure_occurrence.procedure_concept_id, 'left')\
+    .select('procedure_occurrence.*', 'concept_name').withColumnRenamed('concept_name', 'procedure_concept_name')
+
+
+#condition occurrence
+condition_occurrence_train = spark.read.option("header",True).csv("../data/training/condition_occurrence.csv").alias('condition_occurrence_train')
+condition_occurrence_train = condition_occurrence_train.join(concept_names, concept_names.concept_id == condition_occurrence_train.condition_concept_id, 'left')\
+    .select('condition_occurrence_train.*', 'concept_name').withColumnRenamed('concept_name', 'condition_concept_name')
+
+condition_occurrence = spark.read.option("header",True).csv("../data/testing/condition_occurrence.csv").alias('condition_occurrence')
+condition_occurrence = condition_occurrence.join(concept_names, concept_names.concept_id == condition_occurrence.condition_concept_id, 'left')\
+    .select('condition_occurrence.*', 'concept_name').withColumnRenamed('concept_name', 'condition_concept_name')
+
+
 
 #long_covid_silver_standard
-Long_COVID_Silver_Standard_train = spark.read.csv("/data/train/long_covid_silver_standard.csv")
-Long_COVID_Silver_Standard_Blinded = spark.read.csv("/data/test/long_covid_silver_standard.csv")
+Long_COVID_Silver_Standard_train = spark.read.option("header",True).csv("../data/training/long_covid_silver_standard.csv")
+Long_COVID_Silver_Standard_Blinded = spark.read.option("header",True).csv("../data/testing/long_covid_silver_standard.csv")
 
 #person
-person_train = spark.read.csv("/data/train/person.csv")
-person = spark.read.csv("/data/test/person.csv")
+person_train = spark.read.option("header",True).csv("../data/training/person.csv")
+
+person_train = person_train.join(concept_names,concept_names.concept_id == person_train.race_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'concept_name',\
+            'gender_concept_id', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'race_concept_name')
+
+person_train = person_train.join(concept_names,concept_names.concept_id == person_train.gender_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'race_concept_name',\
+            'gender_concept_id', 'concept_name', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'gender_concept_name')
+
+person_train = person_train.join(concept_names,concept_names.concept_id == person_train.ethnicity_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'concept_name', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'race_concept_name',\
+            'gender_concept_id', 'gender_concept_name', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'ethnicity_concept_name')
+
+
+person = spark.read.option("header",True).csv("../data/testing/person.csv")
+
+person = person.join(concept_names,concept_names.concept_id == person.race_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'concept_name',\
+            'gender_concept_id', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'race_concept_name')
+
+person = person.join(concept_names,concept_names.concept_id == person.gender_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'race_concept_name',\
+            'gender_concept_id', 'concept_name', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'gender_concept_name')
+
+person = person.join(concept_names,concept_names.concept_id == person.ethnicity_concept_id,'left')\
+    .select('year_of_birth', 'gender_source_value', 'ethnicity_concept_id', 'concept_name', 'provider_id', \
+            'race_source_concept_id', 'person_id', 'person_source_value', 'month_of_birth', \
+            'gender_source_concept_id', 'ethnicity_source_concept_id', 'care_site_id', \
+            'day_of_birth', 'ethnicity_source_value', 'location_id', 'race_concept_id', 'race_concept_name',\
+            'gender_concept_id', 'gender_concept_name', 'birth_datetime', 'race_source_value')\
+        .withColumnRenamed('concept_name', 'ethnicity_concept_name')
 
 print('INSERT_ENCLAVE_DATA')
 
@@ -601,7 +730,7 @@ print('INSERT_ENCLAVE_DATA')
 #-----------------------------
 # Creat Mapped Concepts
 #-----------------------------
-mapped_concepts_ = mapped_concepts(concept_relationship, concept, DXCCSR_v2021_2)
+mapped_concepts_ = mapped_concepts(concept_relationship, concept, DXCCSR_v2021)
 
 #-----------------------------
 # Map Conditions
